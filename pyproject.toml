@@ -3,7 +3,7 @@ name = "estate_notice"
 authors = [
     { name = "GenEra", email = "noticeestate@gmail.com"}
 ]
-description = "Estate Notice tracking and newspaper-alert system"
+description = "Notice Tracking and newspaper-alert system"
 requires-python = ">=3.14"
 readme = "README.md"
 dynamic = ["version"]

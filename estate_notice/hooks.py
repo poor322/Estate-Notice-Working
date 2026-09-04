@@ -1,7 +1,7 @@
 app_name = "estate_notice"
-app_title = "Estate Notice"
+app_title = "Estate "
 app_publisher = "GenEra"
-app_description = "Estate Notice tracking and newspaper-alert system"
+app_description = "Notice Tracking and newspaper-alert system"
 app_email = "noticeestate@gmail.com"
 app_license = "mit"
 
@@ -15,7 +15,7 @@ app_license = "mit"
 # 	{
 # 		"name": "estate_notice",
 # 		"logo": "/assets/estate_notice/logo.png",
-# 		"title": "Estate Notice",
+# 		"title": "Estate ",
 # 		"route": "/estate_notice",
 # 		"has_permission": "estate_notice.api.permission.has_app_permission"
 # 	}

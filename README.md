@@ -1,6 +1,6 @@
-### Estate Notice
+### Estate 
 
-Estate Notice tracking and newspaper-alert system
+Notice Tracking and newspaper-alert system
 
 ### Installation
 
