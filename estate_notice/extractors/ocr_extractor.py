@@ -2,9 +2,9 @@ import argparse
 import json
 from pathlib import Path
 
+from PIL import Image
 import pymupdf
 import pytesseract
-from PIL import Image
 
 
 def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
