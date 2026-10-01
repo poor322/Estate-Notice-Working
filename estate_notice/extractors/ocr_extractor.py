@@ -2,9 +2,9 @@ import argparse
 import json
 from pathlib import Path
 
-from PIL import Image
 import pymupdf
 import pytesseract
+from PIL import Image
 
 
 def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
@@ -15,9 +15,7 @@ def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
     if not direct_json_path.exists():
-        raise FileNotFoundError(
-            f"direct_text.json not found: {direct_json_path}"
-        )
+        raise FileNotFoundError(f"direct_text.json not found: {direct_json_path}")
     if not ocr_list_path.exists():
         raise FileNotFoundError(
             f"ocr_required_pages.json not found: {ocr_list_path}"
@@ -35,10 +33,7 @@ def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
     with ocr_list_path.open("r", encoding="utf-8") as file:
         ocr_data = json.load(file)
 
-    pages_to_ocr = [
-        page["page_number"]
-        for page in ocr_data["pages"]
-    ]
+    pages_to_ocr = [page["page_number"] for page in ocr_data["pages"]]
 
     print("\nPages needing OCR:")
     if pages_to_ocr:
@@ -126,23 +121,27 @@ def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
 
         if page_number in ocr_results:
             ocr_page = ocr_results[page_number]
-            combined_pages.append({
-                "page_number": page_number,
-                "method": "ocr",
-                "status": ocr_page["status"],
-                "text": ocr_page["text"],
-                "character_count": ocr_page["character_count"],
-                "reason": ocr_page["reason"],
-            })
+            combined_pages.append(
+                {
+                    "page_number": page_number,
+                    "method": "ocr",
+                    "status": ocr_page["status"],
+                    "text": ocr_page["text"],
+                    "character_count": ocr_page["character_count"],
+                    "reason": ocr_page["reason"],
+                }
+            )
         else:
-            combined_pages.append({
-                "page_number": page_number,
-                "method": "direct",
-                "status": direct_page["status"],
-                "text": direct_page["text"],
-                "character_count": direct_page["character_count"],
-                "reason": direct_page["reason"],
-            })
+            combined_pages.append(
+                {
+                    "page_number": page_number,
+                    "method": "direct",
+                    "status": direct_page["status"],
+                    "text": direct_page["text"],
+                    "character_count": direct_page["character_count"],
+                    "reason": direct_page["reason"],
+                }
+            )
 
     combined_pages.sort(key=lambda page: page["page_number"])
 
@@ -161,14 +160,9 @@ def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
     full_text_file = output_folder / "full_newspaper.txt"
     with full_text_file.open("w", encoding="utf-8") as file:
         for page in combined_pages:
-            file.write(
-                "\n\n"
-                "====================================\n"
-            )
+            file.write("\n\n" "====================================\n")
             file.write(f"PAGE {page['page_number']}\n")
-            file.write(
-                "====================================\n\n"
-            )
+            file.write("====================================\n\n")
             file.write(page["text"])
 
     print("\n======================================")
