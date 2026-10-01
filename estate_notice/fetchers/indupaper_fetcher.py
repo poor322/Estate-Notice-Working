@@ -3,7 +3,6 @@ from datetime import datetime
 
 from playwright.sync_api import Playwright, sync_playwright
 
-
 # =========================================================
 # SETTINGS
 # =========================================================
@@ -24,364 +23,228 @@ SITE_NAME = "site1.local"
 # MAIN FETCHER
 # =========================================================
 
+
 def run(playwright: Playwright):
+	print("\n======================================")
+	print("ESTATE NOTICE - NEWSPAPER FETCHER")
+	print("======================================")
 
-    print("\n======================================")
-    print("ESTATE NOTICE - NEWSPAPER FETCHER")
-    print("======================================")
+	# -----------------------------------------------------
+	# STEP 1: GET TODAY'S DATE
+	# -----------------------------------------------------
 
-    # -----------------------------------------------------
-    # STEP 1: GET TODAY'S DATE
-    # -----------------------------------------------------
+	today_folder = datetime.now().strftime("%Y-%m-%d")
 
-    today_folder = datetime.now().strftime("%Y-%m-%d")
+	# For an HTML date input
+	today_for_date_input = datetime.now().strftime("%Y-%m-%d")
 
-    # For an HTML date input
-    today_for_date_input = datetime.now().strftime("%Y-%m-%d")
+	print("\nToday's date:", today_folder)
 
-    print("\nToday's date:", today_folder)
+	# -----------------------------------------------------
+	# STEP 2: CREATE SAVE FOLDER
+	# -----------------------------------------------------
 
+	home = os.path.expanduser("~")
 
-    # -----------------------------------------------------
-    # STEP 2: CREATE SAVE FOLDER
-    # -----------------------------------------------------
+	save_folder = os.path.join(
+		home,
+		"frappe-bench",
+		"sites",
+		SITE_NAME,
+		"private",
+		"files",
+		"newspapers",
+		"hindustan_times",
+		today_folder,
+	)
 
-    home = os.path.expanduser("~")
+	os.makedirs(save_folder, exist_ok=True)
 
-    save_folder = os.path.join(
-        home,
-        "frappe-bench",
-        "sites",
-        SITE_NAME,
-        "private",
-        "files",
-        "newspapers",
-        "hindustan_times",
-        today_folder
-    )
+	save_path = os.path.join(save_folder, "hindustan_times_delhi.pdf")
 
-    os.makedirs(
-        save_folder,
-        exist_ok=True
-    )
+	print("\nPDF will be saved here:")
+	print(save_path)
 
-    save_path = os.path.join(
-        save_folder,
-        "hindustan_times_delhi.pdf"
-    )
+	# -----------------------------------------------------
+	# STEP 3: OPEN BROWSER
+	# -----------------------------------------------------
 
-    print("\nPDF will be saved here:")
-    print(save_path)
+	print("\n1. Opening browser...")
 
+	browser = playwright.chromium.launch(headless=False)
 
-    # -----------------------------------------------------
-    # STEP 3: OPEN BROWSER
-    # -----------------------------------------------------
+	context = browser.new_context(accept_downloads=True)
 
-    print("\n1. Opening browser...")
+	page = context.new_page()
 
-    browser = playwright.chromium.launch(
-        headless=False
-    )
+	# -----------------------------------------------------
+	# STEP 4: OPEN INDUPAPER
+	# -----------------------------------------------------
 
-    context = browser.new_context(
-        accept_downloads=True
-    )
+	print("2. Opening InduPaper...")
 
-    page = context.new_page()
+	page.goto(URL, wait_until="domcontentloaded", timeout=60000)
 
+	print("3. InduPaper opened")
 
-    # -----------------------------------------------------
-    # STEP 4: OPEN INDUPAPER
-    # -----------------------------------------------------
+	page.wait_for_timeout(3000)
 
-    print("2. Opening InduPaper...")
+	# -----------------------------------------------------
+	# STEP 5: SET TODAY'S DATE
+	# -----------------------------------------------------
 
-    page.goto(
-        URL,
-        wait_until="domcontentloaded",
-        timeout=60000
-    )
+	print("\n4. Trying to select today's date...")
 
-    print("3. InduPaper opened")
+	try:
+		# First try normal HTML date field
+		date_input = page.locator("input[type='date']")
 
-    page.wait_for_timeout(3000)
+		if date_input.count() > 0:
+			date_input.first.fill(today_for_date_input)
 
+			print("5. Date selected:", today_for_date_input)
 
-    # -----------------------------------------------------
-    # STEP 5: SET TODAY'S DATE
-    # -----------------------------------------------------
+		else:
+			print("5. Date input not detected.")
 
-    print("\n4. Trying to select today's date...")
+			print("Website's default date will be used.")
 
-    try:
+	except Exception as e:
+		print("Could not automatically set date.")
 
-        # First try normal HTML date field
-        date_input = page.locator(
-            "input[type='date']"
-        )
+		print("Using website default date.")
 
-        if date_input.count() > 0:
+		print("Date error:", e)
 
-            date_input.first.fill(
-                today_for_date_input
-            )
+	page.wait_for_timeout(2000)
 
-            print(
-                "5. Date selected:",
-                today_for_date_input
-            )
+	# -----------------------------------------------------
+	# STEP 6: SELECT SUB CITY
+	# -----------------------------------------------------
 
-        else:
+	print("\n6. Selecting Delhi City...")
 
-            print(
-                "5. Date input not detected."
-            )
+	sub_city = page.get_by_label("Sub City")
 
-            print(
-                "Website's default date will be used."
-            )
+	sub_city.wait_for(state="attached", timeout=20000)
 
-    except Exception as e:
+	sub_city.select_option(SUB_CITY_VALUE)
 
-        print(
-            "Could not automatically set date."
-        )
+	print("7. Delhi City selected")
 
-        print(
-            "Using website default date."
-        )
+	# Give website time to update buttons
+	page.wait_for_timeout(3000)
 
-        print(
-            "Date error:",
-            e
-        )
+	# -----------------------------------------------------
+	# STEP 7: FIND PDF BUTTON
+	# -----------------------------------------------------
 
+	print("\n8. Looking for PDF button...")
 
-    page.wait_for_timeout(2000)
+	pdf_button = page.get_by_role("button", name="⬇ PDF")
 
+	pdf_button.wait_for(state="visible", timeout=30000)
 
-    # -----------------------------------------------------
-    # STEP 6: SELECT SUB CITY
-    # -----------------------------------------------------
+	print("9. PDF button found")
 
-    print(
-        "\n6. Selecting Delhi City..."
-    )
+	print("PDF visible:", pdf_button.is_visible())
 
-    sub_city = page.get_by_label(
-        "Sub City"
-    )
+	print("PDF enabled:", pdf_button.is_enabled())
 
-    sub_city.wait_for(
-        state="attached",
-        timeout=20000
-    )
+	# -----------------------------------------------------
+	# STEP 8: SCROLL TO PDF BUTTON
+	# -----------------------------------------------------
 
-    sub_city.select_option(
-        SUB_CITY_VALUE
-    )
+	print("\n10. Scrolling to PDF button...")
 
-    print(
-        "7. Delhi City selected"
-    )
+	pdf_button.scroll_into_view_if_needed()
 
-    # Give website time to update buttons
-    page.wait_for_timeout(3000)
+	page.wait_for_timeout(2000)
 
+	print("11. Scroll completed")
 
-    # -----------------------------------------------------
-    # STEP 7: FIND PDF BUTTON
-    # -----------------------------------------------------
+	# -----------------------------------------------------
+	# STEP 9: CLICK PDF AND WAIT FOR DOWNLOAD
+	# -----------------------------------------------------
 
-    print(
-        "\n8. Looking for PDF button..."
-    )
+	print("\n12. Clicking PDF...")
 
-    pdf_button = page.get_by_role(
-        "button",
-        name="⬇ PDF"
-    )
+	try:
+		with page.expect_download(timeout=120000) as download_info:
+			pdf_button.click(timeout=30000)
 
-    pdf_button.wait_for(
-        state="visible",
-        timeout=30000
-    )
+		download = download_info.value
 
-    print(
-        "9. PDF button found"
-    )
+		print("\n13. DOWNLOAD DETECTED!")
 
-    print(
-        "PDF visible:",
-        pdf_button.is_visible()
-    )
+		print("Original filename:", download.suggested_filename)
 
-    print(
-        "PDF enabled:",
-        pdf_button.is_enabled()
-    )
+		# -------------------------------------------------
+		# STEP 10: SAVE PDF INTO FRAPPE
+		# -------------------------------------------------
 
+		download.save_as(save_path)
 
-    # -----------------------------------------------------
-    # STEP 8: SCROLL TO PDF BUTTON
-    # -----------------------------------------------------
+		print("\n======================================")
 
-    print(
-        "\n10. Scrolling to PDF button..."
-    )
+		print("DOWNLOAD SUCCESSFUL")
 
-    pdf_button.scroll_into_view_if_needed()
+		print("======================================")
 
-    page.wait_for_timeout(2000)
+		print("\nNewspaper:")
 
-    print(
-        "11. Scroll completed"
-    )
+		print(NEWSPAPER_NAME)
 
+		print("\nEdition:")
 
-    # -----------------------------------------------------
-    # STEP 9: CLICK PDF AND WAIT FOR DOWNLOAD
-    # -----------------------------------------------------
+		print(EDITION_NAME)
 
-    print(
-        "\n12. Clicking PDF..."
-    )
+		print("\nDate:")
 
-    try:
+		print(today_folder)
 
-        with page.expect_download(
-            timeout=120000
-        ) as download_info:
+		print("\nSaved PDF:")
 
-            pdf_button.click(
-                timeout=30000
-            )
+		print(save_path)
 
-        download = download_info.value
+		# -------------------------------------------------
+		# STEP 11: RETURN FETCH INFORMATION
+		# -------------------------------------------------
 
-        print(
-            "\n13. DOWNLOAD DETECTED!"
-        )
+		result = {
+			"status": "success",
+			"source": NEWSPAPER_NAME,
+			"edition": EDITION_NAME,
+			"date": today_folder,
+			"file_path": save_path,
+		}
 
-        print(
-            "Original filename:",
-            download.suggested_filename
-        )
+		print("\nFetcher Result:")
 
+		print(result)
 
-        # -------------------------------------------------
-        # STEP 10: SAVE PDF INTO FRAPPE
-        # -------------------------------------------------
+	except Exception as e:
+		print("\n======================================")
 
-        download.save_as(
-            save_path
-        )
+		print("DOWNLOAD FAILED")
 
-        print(
-            "\n======================================"
-        )
+		print("======================================")
 
-        print(
-            "DOWNLOAD SUCCESSFUL"
-        )
+		print("\nError:")
 
-        print(
-            "======================================"
-        )
+		print(e)
 
-        print(
-            "\nNewspaper:"
-        )
+	# -----------------------------------------------------
+	# STEP 12: CLOSE BROWSER
+	# -----------------------------------------------------
 
-        print(
-            NEWSPAPER_NAME
-        )
+	print("\n14. Closing browser...")
 
-        print(
-            "\nEdition:"
-        )
+	context.close()
 
-        print(
-            EDITION_NAME
-        )
+	browser.close()
 
-        print(
-            "\nDate:"
-        )
-
-        print(
-            today_folder
-        )
-
-        print(
-            "\nSaved PDF:"
-        )
-
-        print(
-            save_path
-        )
-
-
-        # -------------------------------------------------
-        # STEP 11: RETURN FETCH INFORMATION
-        # -------------------------------------------------
-
-        result = {
-            "status": "success",
-            "source": NEWSPAPER_NAME,
-            "edition": EDITION_NAME,
-            "date": today_folder,
-            "file_path": save_path
-        }
-
-        print(
-            "\nFetcher Result:"
-        )
-
-        print(
-            result
-        )
-
-
-    except Exception as e:
-
-        print(
-            "\n======================================"
-        )
-
-        print(
-            "DOWNLOAD FAILED"
-        )
-
-        print(
-            "======================================"
-        )
-
-        print(
-            "\nError:"
-        )
-
-        print(
-            e
-        )
-
-
-    # -----------------------------------------------------
-    # STEP 12: CLOSE BROWSER
-    # -----------------------------------------------------
-
-    print(
-        "\n14. Closing browser..."
-    )
-
-    context.close()
-
-    browser.close()
-
-    print(
-        "15. Fetcher finished."
-    )
+	print("15. Fetcher finished.")
 
 
 # =========================================================
@@ -389,7 +252,5 @@ def run(playwright: Playwright):
 # =========================================================
 
 if __name__ == "__main__":
-
-    with sync_playwright() as playwright:
-
-        run(playwright)
+	with sync_playwright() as playwright:
+		run(playwright)
