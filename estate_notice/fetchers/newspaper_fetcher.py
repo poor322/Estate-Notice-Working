@@ -17,7 +17,7 @@ def fetch_newspaper_page(url, source, page_number=1):
         "files",
         "newspapers",
         source.replace(" ", "_"),
-        date
+        date,
     )
 
     os.makedirs(folder, exist_ok=True)
@@ -40,7 +40,7 @@ def fetch_newspaper_page(url, source, page_number=1):
         "date": date,
         "page_number": page_number,
         "file_path": file_path,
-        "status": "fetched"
+        "status": "fetched",
     }
 
     print(result)
