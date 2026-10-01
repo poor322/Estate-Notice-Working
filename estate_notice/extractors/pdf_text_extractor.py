@@ -1,17 +1,15 @@
 import json
-import os
+import re
+from pathlib import Path
 
 from pypdf import PdfReader
 
-# ============================================================
-# SETTINGS
-# ============================================================
+SITE_NAME = "site1.local"
 
 MIN_CHARACTERS = 80
 MIN_WORDS = 10
 
 
-# Strong notice words
 PRIMARY_NOTICE_KEYWORDS = [
 	"public notice",
 	"legal notice",
@@ -19,7 +17,6 @@ PRIMARY_NOTICE_KEYWORDS = [
 ]
 
 
-# Property-related words
 PROPERTY_KEYWORDS = [
 	"survey no",
 	"survey number",
@@ -42,85 +39,199 @@ PROPERTY_KEYWORDS = [
 ALL_KEYWORDS = PRIMARY_NOTICE_KEYWORDS + PROPERTY_KEYWORDS
 
 
-# ============================================================
-# CHECK WHETHER DIRECTLY EXTRACTED TEXT IS USABLE
-# ============================================================
+def get_private_files_root():
+	return (Path.home() / "frappe-bench" / "sites" / SITE_NAME / "private" / "files").resolve()
 
 
-def check_text_quality(text):
+def get_allowed_newspaper_root():
+	return (get_private_files_root() / "newspapers").resolve()
+
+
+def get_output_root():
+	return (get_private_files_root() / "estate_notice").resolve()
+
+
+def ensure_within_root(
+	path,
+	root,
+):
+	resolved_path = Path(path).resolve()
+
+	resolved_root = Path(root).resolve()
+
+	try:
+		resolved_path.relative_to(resolved_root)
+
+	except ValueError as error:
+		raise ValueError(f"Path is outside the allowed directory: {resolved_root}") from error
+
+	return resolved_path
+
+
+def validate_pdf_path(
+	pdf_path,
+):
+	allowed_root = get_allowed_newspaper_root()
+
+	if not allowed_root.exists():
+		raise FileNotFoundError(f"Newspaper folder does not exist: {allowed_root}")
+
+	requested_pdf = Path(pdf_path).expanduser().resolve()
+
+	ensure_within_root(
+		requested_pdf,
+		allowed_root,
+	)
+
+	if requested_pdf.suffix.lower() != ".pdf":
+		raise ValueError("Only PDF files are allowed")
+
+	if not requested_pdf.is_file():
+		raise FileNotFoundError(f"PDF file does not exist: {requested_pdf}")
+
+	return requested_pdf
+
+
+def safe_name(
+	value,
+):
+	cleaned = re.sub(
+		r"[^A-Za-z0-9._-]+",
+		"_",
+		value,
+	).strip("._")
+
+	if not cleaned:
+		return "newspaper"
+
+	return cleaned[:120]
+
+
+def safe_output_path(
+	base_dir,
+	relative_path,
+):
+	base_dir = Path(base_dir).resolve()
+
+	target_path = (base_dir / relative_path).resolve()
+
+	ensure_within_root(
+		target_path,
+		base_dir,
+	)
+
+	return target_path
+
+
+def safe_write_text(
+	base_dir,
+	relative_path,
+	content,
+):
+	target_path = safe_output_path(
+		base_dir,
+		relative_path,
+	)
+
+	target_path.parent.mkdir(
+		parents=True,
+		exist_ok=True,
+	)
+
+	target_path.write_text(
+		content,
+		encoding="utf-8",
+	)
+
+	return target_path
+
+
+def safe_write_json(
+	base_dir,
+	relative_path,
+	data,
+):
+	json_text = json.dumps(
+		data,
+		indent=4,
+		ensure_ascii=False,
+	)
+
+	return safe_write_text(
+		base_dir,
+		relative_path,
+		json_text,
+	)
+
+
+def check_text_quality(
+	text,
+):
 	cleaned_text = " ".join(text.split())
 
-	# No selectable text
 	if not cleaned_text:
-		return ("needs_ocr", "No selectable text found")
+		return (
+			"needs_ocr",
+			"No selectable text found",
+		)
 
-	# Sometimes PDF contains only page number
 	if cleaned_text.isdigit():
-		return ("needs_ocr", "Only page number or numeric text was extracted")
+		return (
+			"needs_ocr",
+			"Only page number or numeric text was extracted",
+		)
 
 	character_count = len(cleaned_text)
 
 	word_count = len(cleaned_text.split())
 
-	# Very small amount of selectable text
 	if character_count < MIN_CHARACTERS:
-		return ("needs_ocr", "Too little selectable text was extracted")
+		return (
+			"needs_ocr",
+			"Too little selectable text was extracted",
+		)
 
 	if word_count < MIN_WORDS:
-		return ("needs_ocr", "Extracted text is too short to be useful")
+		return (
+			"needs_ocr",
+			"Extracted text is too short to be useful",
+		)
 
-	return ("usable", None)
+	return (
+		"usable",
+		None,
+	)
 
 
-# ============================================================
-# FIND KEYWORDS
-# ============================================================
-
-
-def find_keywords(text):
+def find_keywords(
+	text,
+):
 	text_lower = text.lower()
 
-	primary_found = []
-	property_found = []
+	primary_found = [keyword for keyword in PRIMARY_NOTICE_KEYWORDS if keyword.lower() in text_lower]
 
-	for keyword in PRIMARY_NOTICE_KEYWORDS:
-		if keyword.lower() in text_lower:
-			primary_found.append(keyword)
+	property_found = [keyword for keyword in PROPERTY_KEYWORDS if keyword.lower() in text_lower]
 
-	for keyword in PROPERTY_KEYWORDS:
-		if keyword.lower() in text_lower:
-			property_found.append(keyword)
-
-	return (primary_found, property_found)
+	return (
+		primary_found,
+		property_found,
+	)
 
 
-# ============================================================
-# DECIDE WHETHER PAGE IS A NOTICE CANDIDATE
-# ============================================================
-
-
-def is_notice_candidate(primary_keywords, property_keywords):
-	# PUBLIC NOTICE / LEGAL NOTICE is strong evidence
+def is_notice_candidate(
+	primary_keywords,
+	property_keywords,
+):
 	if primary_keywords:
 		return True
 
-	# Otherwise require at least two
-	# property-related indicators
-	if len(property_keywords) >= 2:
-		return True
-
-	return False
+	return len(property_keywords) >= 2
 
 
-# ============================================================
-# EXTRACT ONLY RELEVANT NOTICE AREA
-# ============================================================
-
-
-def extract_notice_context(text):
+def extract_notice_context(
+	text,
+):
 	lines = text.splitlines()
-
-	selected_lines = []
 
 	selected_indexes = set()
 
@@ -132,112 +243,103 @@ def extract_notice_context(text):
 		if not keyword_found:
 			continue
 
-		# Keep 2 lines before keyword,
-		# keyword line,
-		# and 2 lines after.
-		start = max(0, index - 2)
+		start = max(
+			0,
+			index - 2,
+		)
 
-		end = min(len(lines), index + 3)
+		end = min(
+			len(lines),
+			index + 3,
+		)
 
-		for selected_index in range(start, end):
-			selected_indexes.add(selected_index)
+		selected_indexes.update(
+			range(
+				start,
+				end,
+			)
+		)
 
-	# Keep original order
-	for index in sorted(selected_indexes):
-		line = lines[index].strip()
-
-		if line:
-			selected_lines.append(line)
+	selected_lines = [lines[index].strip() for index in sorted(selected_indexes) if lines[index].strip()]
 
 	return "\n".join(selected_lines)
 
 
-# ============================================================
-# MAIN EXTRACTION FUNCTION
-# ============================================================
-
-
-def extract_pdf_text(pdf_path):
+def extract_pdf_text(
+	pdf_path,
+):
 	print("\n======================================")
 
 	print("ESTATE NOTICE - PDF TEXT EXTRACTION")
 
 	print("======================================")
 
-	# --------------------------------------------------------
-	# CLEAN INPUT PATH
-	# --------------------------------------------------------
+	try:
+		pdf_path = validate_pdf_path(pdf_path)
 
-	pdf_path = os.path.abspath(os.path.expanduser(pdf_path))
+	except (
+		ValueError,
+		FileNotFoundError,
+	) as error:
+		print("\nERROR:")
 
-	# --------------------------------------------------------
-	# CHECK FILE EXISTS
-	# --------------------------------------------------------
+		print(error)
 
-	if not os.path.exists(pdf_path):
-		print("\nERROR: PDF not found")
-
-		print(pdf_path)
-
-		return {"status": "failed", "reason": "file_not_found"}
-
-	# --------------------------------------------------------
-	# CHECK PDF EXTENSION
-	# --------------------------------------------------------
-
-	if not pdf_path.lower().endswith(".pdf"):
-		print("\nERROR: Selected file is not PDF")
-
-		return {"status": "failed", "reason": "not_a_pdf"}
+		return {
+			"status": "failed",
+			"reason": str(error),
+		}
 
 	print("\nPDF found:")
 
 	print(pdf_path)
 
-	# --------------------------------------------------------
-	# OPEN PDF
-	# --------------------------------------------------------
-
 	try:
-		reader = PdfReader(pdf_path)
+		reader = PdfReader(str(pdf_path))
 
 	except Exception as error:
 		print("\nERROR: Could not open PDF")
 
 		print(error)
 
-		return {"status": "failed", "reason": "pdf_open_failed", "error": str(error)}
+		return {
+			"status": "failed",
+			"reason": "pdf_open_failed",
+			"error": str(error),
+		}
 
 	total_pages = len(reader.pages)
 
-	print("\nTotal PDF pages:", total_pages)
-
 	if total_pages == 0:
-		return {"status": "failed", "reason": "pdf_has_no_pages"}
+		return {
+			"status": "failed",
+			"reason": "pdf_has_no_pages",
+		}
 
-	# ========================================================
-	# CREATE OUTPUT FOLDERS
-	# ========================================================
+	print(
+		"\nTotal PDF pages:",
+		total_pages,
+	)
 
-	pdf_folder = os.path.dirname(pdf_path)
+	output_root = get_output_root()
 
-	output_folder = os.path.join(pdf_folder, "direct_extraction")
+	newspaper_name = safe_name(pdf_path.stem)
 
-	page_text_folder = os.path.join(output_folder, "pages")
+	output_folder = (output_root / "direct_extraction" / newspaper_name).resolve()
 
-	notice_folder = os.path.join(output_folder, "notice_candidates")
+	ensure_within_root(
+		output_folder,
+		output_root,
+	)
 
-	os.makedirs(page_text_folder, exist_ok=True)
-
-	os.makedirs(notice_folder, exist_ok=True)
+	output_folder.mkdir(
+		parents=True,
+		exist_ok=True,
+	)
 
 	print("\nOutput folder:")
 
 	print(output_folder)
-
-	# ========================================================
-	# RESULT STORAGE
-	# ========================================================
 
 	all_pages = []
 
@@ -249,25 +351,21 @@ def extract_pdf_text(pdf_path):
 
 	total_characters = 0
 
-	# ========================================================
-	# PROCESS EVERY PAGE
-	# ========================================================
-
-	for page_number, page in enumerate(reader.pages, start=1):
+	for (
+		page_number,
+		page,
+	) in enumerate(
+		reader.pages,
+		start=1,
+	):
 		print("\n--------------------------------------")
 
 		print(f"Processing page {page_number}/{total_pages}")
 
 		extraction_error = None
 
-		# ----------------------------------------------------
-		# DIRECT TEXT EXTRACTION
-		# ----------------------------------------------------
-
 		try:
-			text = page.extract_text() or ""
-
-			text = text.strip()
+			text = (page.extract_text() or "").strip()
 
 		except Exception as error:
 			text = ""
@@ -278,10 +376,6 @@ def extract_pdf_text(pdf_path):
 
 		total_characters += character_count
 
-		# ----------------------------------------------------
-		# CHECK TEXT QUALITY
-		# ----------------------------------------------------
-
 		if extraction_error:
 			status = "needs_ocr"
 
@@ -290,18 +384,13 @@ def extract_pdf_text(pdf_path):
 		else:
 			status, reason = check_text_quality(text)
 
-		# ====================================================
-		# SAVE COMPLETE PAGE TEXT
-		# ====================================================
+		page_relative_path = Path("pages") / (f"page_{page_number:03d}.txt")
 
-		page_text_path = os.path.join(page_text_folder, f"page_{page_number:03d}.txt")
-
-		with open(page_text_path, "w", encoding="utf-8") as file:
-			file.write(text)
-
-		# ====================================================
-		# KEYWORD / NOTICE CHECK
-		# ====================================================
+		page_text_path = safe_write_text(
+			output_folder,
+			page_relative_path,
+			text,
+		)
 
 		primary_keywords = []
 
@@ -313,24 +402,27 @@ def extract_pdf_text(pdf_path):
 
 		notice_text_path = None
 
-		# Only search keywords if
-		# direct text is actually usable
 		if status == "usable":
-			(primary_keywords, property_keywords) = find_keywords(text)
+			(
+				primary_keywords,
+				property_keywords,
+			) = find_keywords(text)
 
-			notice_candidate = is_notice_candidate(primary_keywords, property_keywords)
-
-			# ------------------------------------------------
-			# EXTRACT ONLY NOTICE-RELATED TEXT
-			# ------------------------------------------------
+			notice_candidate = is_notice_candidate(
+				primary_keywords,
+				property_keywords,
+			)
 
 			if notice_candidate:
 				notice_text = extract_notice_context(text)
 
-				notice_text_path = os.path.join(notice_folder, f"page_{page_number:03d}.txt")
+				notice_relative_path = Path("notice_candidates") / (f"page_{page_number:03d}.txt")
 
-				with open(notice_text_path, "w", encoding="utf-8") as file:
-					file.write(notice_text)
+				notice_text_path = safe_write_text(
+					output_folder,
+					notice_relative_path,
+					notice_text,
+				)
 
 				notice_candidate_pages.append(
 					{
@@ -338,13 +430,9 @@ def extract_pdf_text(pdf_path):
 						"primary_keywords": primary_keywords,
 						"property_keywords": property_keywords,
 						"text": notice_text,
-						"text_file": notice_text_path,
+						"text_file": str(notice_text_path),
 					}
 				)
-
-		# ====================================================
-		# SAVE PAGE RESULT
-		# ====================================================
 
 		page_result = {
 			"page_number": page_number,
@@ -352,54 +440,59 @@ def extract_pdf_text(pdf_path):
 			"status": status,
 			"character_count": character_count,
 			"text": text,
-			"text_file": page_text_path,
+			"text_file": str(page_text_path),
 			"reason": reason,
 			"notice_candidate": notice_candidate,
 			"primary_keywords": primary_keywords,
 			"property_keywords": property_keywords,
 			"notice_text": notice_text,
-			"notice_text_file": notice_text_path,
+			"notice_text_file": (str(notice_text_path) if notice_text_path else None),
 		}
 
 		all_pages.append(page_result)
 
-		# ====================================================
-		# PRINT RESULT
-		# ====================================================
-
 		if status == "needs_ocr":
 			ocr_required_pages.append(
-				{"page_number": page_number, "reason": reason, "character_count": character_count}
+				{
+					"page_number": page_number,
+					"reason": reason,
+					"character_count": character_count,
+				}
 			)
 
 			print("Result: OCR REQUIRED")
 
-			print("Reason:", reason)
+			print(
+				"Reason:",
+				reason,
+			)
 
 		else:
 			usable_pages += 1
 
 			print("Result: DIRECT TEXT USABLE")
 
-			print("Characters extracted:", character_count)
+			print(
+				"Characters extracted:",
+				character_count,
+			)
 
 			if notice_candidate:
-				print("NOTICE CANDIDATE FOUND")
-
 				all_found = primary_keywords + property_keywords
 
-				print("Keywords:", ", ".join(all_found))
+				print("NOTICE CANDIDATE FOUND")
+
+				print(
+					"Keywords:",
+					", ".join(all_found),
+				)
 
 			else:
 				print("No notice candidate found")
 
-	# ========================================================
-	# SAVE direct_text.json
-	# ========================================================
-
 	direct_result = {
 		"status": "success",
-		"pdf_path": pdf_path,
+		"pdf_path": str(pdf_path),
 		"total_pages": total_pages,
 		"usable_direct_pages": usable_pages,
 		"ocr_required_pages": len(ocr_required_pages),
@@ -408,45 +501,36 @@ def extract_pdf_text(pdf_path):
 		"pages": all_pages,
 	}
 
-	direct_json_path = os.path.join(output_folder, "direct_text.json")
-
-	with open(direct_json_path, "w", encoding="utf-8") as file:
-		json.dump(direct_result, file, indent=4, ensure_ascii=False)
-
-	# ========================================================
-	# SAVE ocr_required_pages.json
-	# ========================================================
+	direct_json_path = safe_write_json(
+		output_folder,
+		"direct_text.json",
+		direct_result,
+	)
 
 	ocr_result = {
-		"pdf_path": pdf_path,
+		"pdf_path": str(pdf_path),
 		"total_pages": total_pages,
 		"ocr_required_count": len(ocr_required_pages),
 		"pages": ocr_required_pages,
 	}
 
-	ocr_json_path = os.path.join(output_folder, "ocr_required_pages.json")
-
-	with open(ocr_json_path, "w", encoding="utf-8") as file:
-		json.dump(ocr_result, file, indent=4, ensure_ascii=False)
-
-	# ========================================================
-	# SAVE notice_candidates.json
-	# ========================================================
+	ocr_json_path = safe_write_json(
+		output_folder,
+		"ocr_required_pages.json",
+		ocr_result,
+	)
 
 	notice_result = {
-		"pdf_path": pdf_path,
+		"pdf_path": str(pdf_path),
 		"candidate_count": len(notice_candidate_pages),
 		"pages": notice_candidate_pages,
 	}
 
-	notice_json_path = os.path.join(output_folder, "notice_candidates.json")
-
-	with open(notice_json_path, "w", encoding="utf-8") as file:
-		json.dump(notice_result, file, indent=4, ensure_ascii=False)
-
-	# ========================================================
-	# FINAL SUMMARY
-	# ========================================================
+	notice_json_path = safe_write_json(
+		output_folder,
+		"notice_candidates.json",
+		notice_result,
+	)
 
 	print("\n======================================")
 
@@ -454,26 +538,30 @@ def extract_pdf_text(pdf_path):
 
 	print("======================================")
 
-	print("\nTotal pages:", total_pages)
+	print(
+		"\nTotal pages:",
+		total_pages,
+	)
 
-	print("Usable direct-text pages:", usable_pages)
+	print(
+		"Usable direct-text pages:",
+		usable_pages,
+	)
 
-	print("OCR required pages:", len(ocr_required_pages))
+	print(
+		"OCR required pages:",
+		len(ocr_required_pages),
+	)
 
-	print("Notice candidate pages:", len(notice_candidate_pages))
-
-	# --------------------------------------------------------
-	# OCR PAGE NUMBERS
-	# --------------------------------------------------------
+	print(
+		"Notice candidate pages:",
+		len(notice_candidate_pages),
+	)
 
 	if ocr_required_pages:
 		print("\nPages to send to Janvi:")
 
 		print(", ".join(str(page["page_number"]) for page in ocr_required_pages))
-
-	# --------------------------------------------------------
-	# NOTICE PAGE NUMBERS
-	# --------------------------------------------------------
 
 	if notice_candidate_pages:
 		print("\nPossible estate/public notice pages:")
@@ -498,12 +586,9 @@ def extract_pdf_text(pdf_path):
 		"usable_direct_pages": usable_pages,
 		"ocr_required_pages": len(ocr_required_pages),
 		"notice_candidate_pages": len(notice_candidate_pages),
+		"output_folder": str(output_folder),
 	}
 
-
-# ============================================================
-# RUN FROM TERMINAL
-# ============================================================
 
 if __name__ == "__main__":
 	print("\nPaste the full newspaper PDF path.")
