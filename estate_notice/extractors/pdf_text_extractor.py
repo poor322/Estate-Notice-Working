@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 from pypdf import PdfReader
 
 
@@ -7,28 +8,55 @@ from pypdf import PdfReader
 # SETTINGS
 # ============================================================
 
-# These are simple checks to decide whether extracted text
-# looks useful enough or should be sent to Janvi for OCR.
 MIN_CHARACTERS = 80
 MIN_WORDS = 10
 
 
+# Strong notice words
+PRIMARY_NOTICE_KEYWORDS = [
+    "public notice",
+    "legal notice",
+    "estate notice",
+]
+
+
+# Property-related words
+PROPERTY_KEYWORDS = [
+    "survey no",
+    "survey number",
+    "survey",
+    "tp no",
+    "tp number",
+    "town planning",
+    "property",
+    "final plot",
+    "plot no",
+    "plot number",
+    "village",
+    "owner",
+    "land",
+    "title",
+    "sale deed",
+]
+
+
+ALL_KEYWORDS = (
+    PRIMARY_NOTICE_KEYWORDS
+    + PROPERTY_KEYWORDS
+)
+
+
 # ============================================================
-# CHECK WHETHER TEXT IS USABLE
+# CHECK WHETHER DIRECTLY EXTRACTED TEXT IS USABLE
 # ============================================================
 
 def check_text_quality(text):
-    """
-    Check whether the directly extracted text looks usable.
 
-    Returns:
-        status
-        reason
-    """
+    cleaned_text = " ".join(
+        text.split()
+    )
 
-    cleaned_text = " ".join(text.split())
-
-    # No text at all
+    # No selectable text
     if not cleaned_text:
 
         return (
@@ -36,21 +64,23 @@ def check_text_quality(text):
             "No selectable text found"
         )
 
-    # Sometimes only page number like "3" is extracted
+    # Sometimes PDF contains only page number
     if cleaned_text.isdigit():
 
         return (
             "needs_ocr",
-            "Only a page number or numeric text was extracted"
+            "Only page number or numeric text was extracted"
         )
 
-    character_count = len(cleaned_text)
+    character_count = len(
+        cleaned_text
+    )
 
-    words = cleaned_text.split()
+    word_count = len(
+        cleaned_text.split()
+    )
 
-    word_count = len(words)
-
-    # Very little text
+    # Very small amount of selectable text
     if character_count < MIN_CHARACTERS:
 
         return (
@@ -58,7 +88,6 @@ def check_text_quality(text):
             "Too little selectable text was extracted"
         )
 
-    # Not enough real words
     if word_count < MIN_WORDS:
 
         return (
@@ -73,50 +102,210 @@ def check_text_quality(text):
 
 
 # ============================================================
+# FIND KEYWORDS
+# ============================================================
+
+def find_keywords(text):
+
+    text_lower = text.lower()
+
+    primary_found = []
+    property_found = []
+
+    for keyword in PRIMARY_NOTICE_KEYWORDS:
+
+        if keyword.lower() in text_lower:
+
+            primary_found.append(
+                keyword
+            )
+
+    for keyword in PROPERTY_KEYWORDS:
+
+        if keyword.lower() in text_lower:
+
+            property_found.append(
+                keyword
+            )
+
+    return (
+        primary_found,
+        property_found
+    )
+
+
+# ============================================================
+# DECIDE WHETHER PAGE IS A NOTICE CANDIDATE
+# ============================================================
+
+def is_notice_candidate(
+    primary_keywords,
+    property_keywords
+):
+
+    # PUBLIC NOTICE / LEGAL NOTICE is strong evidence
+    if primary_keywords:
+
+        return True
+
+    # Otherwise require at least two
+    # property-related indicators
+    if len(property_keywords) >= 2:
+
+        return True
+
+    return False
+
+
+# ============================================================
+# EXTRACT ONLY RELEVANT NOTICE AREA
+# ============================================================
+
+def extract_notice_context(text):
+
+    lines = text.splitlines()
+
+    selected_lines = []
+
+    selected_indexes = set()
+
+
+    for index, line in enumerate(lines):
+
+        line_lower = line.lower()
+
+        keyword_found = any(
+            keyword.lower() in line_lower
+            for keyword in ALL_KEYWORDS
+        )
+
+        if not keyword_found:
+
+            continue
+
+
+        # Keep 2 lines before keyword,
+        # keyword line,
+        # and 2 lines after.
+        start = max(
+            0,
+            index - 2
+        )
+
+        end = min(
+            len(lines),
+            index + 3
+        )
+
+
+        for selected_index in range(
+            start,
+            end
+        ):
+
+            selected_indexes.add(
+                selected_index
+            )
+
+
+    # Keep original order
+    for index in sorted(
+        selected_indexes
+    ):
+
+        line = lines[
+            index
+        ].strip()
+
+        if line:
+
+            selected_lines.append(
+                line
+            )
+
+
+    return "\n".join(
+        selected_lines
+    )
+
+
+# ============================================================
 # MAIN EXTRACTION FUNCTION
 # ============================================================
 
-def extract_direct_text(pdf_path):
+def extract_pdf_text(pdf_path):
 
-    print("\n======================================")
-    print("ESTATE NOTICE - PDF TEXT EXTRACTION")
-    print("======================================")
+    print(
+        "\n======================================"
+    )
+
+    print(
+        "ESTATE NOTICE - PDF TEXT EXTRACTION"
+    )
+
+    print(
+        "======================================"
+    )
+
 
     # --------------------------------------------------------
-    # CHECK PDF PATH
+    # CLEAN INPUT PATH
     # --------------------------------------------------------
 
     pdf_path = os.path.abspath(
-        os.path.expanduser(pdf_path)
+        os.path.expanduser(
+            pdf_path
+        )
     )
 
-    if not os.path.exists(pdf_path):
 
-        print("\nERROR:")
-        print("PDF file not found:")
-        print(pdf_path)
+    # --------------------------------------------------------
+    # CHECK FILE EXISTS
+    # --------------------------------------------------------
+
+    if not os.path.exists(
+        pdf_path
+    ):
+
+        print(
+            "\nERROR: PDF not found"
+        )
+
+        print(
+            pdf_path
+        )
 
         return {
             "status": "failed",
-            "reason": "file_not_found",
-            "pdf_path": pdf_path
+            "reason": "file_not_found"
         }
 
 
-    if not pdf_path.lower().endswith(".pdf"):
+    # --------------------------------------------------------
+    # CHECK PDF EXTENSION
+    # --------------------------------------------------------
 
-        print("\nERROR:")
-        print("The supplied file is not a PDF.")
+    if not pdf_path.lower().endswith(
+        ".pdf"
+    ):
+
+        print(
+            "\nERROR: Selected file is not PDF"
+        )
 
         return {
             "status": "failed",
-            "reason": "not_a_pdf",
-            "pdf_path": pdf_path
+            "reason": "not_a_pdf"
         }
 
 
-    print("\nPDF found:")
-    print(pdf_path)
+    print(
+        "\nPDF found:"
+    )
+
+    print(
+        pdf_path
+    )
 
 
     # --------------------------------------------------------
@@ -131,15 +320,18 @@ def extract_direct_text(pdf_path):
 
     except Exception as error:
 
-        print("\nERROR:")
-        print("Could not open PDF.")
-        print(error)
+        print(
+            "\nERROR: Could not open PDF"
+        )
+
+        print(
+            error
+        )
 
         return {
             "status": "failed",
             "reason": "pdf_open_failed",
-            "error": str(error),
-            "pdf_path": pdf_path
+            "error": str(error)
         }
 
 
@@ -148,19 +340,17 @@ def extract_direct_text(pdf_path):
     )
 
 
-    print("\nTotal PDF pages:")
-    print(total_pages)
+    print(
+        "\nTotal PDF pages:",
+        total_pages
+    )
 
 
     if total_pages == 0:
 
-        print("\nERROR:")
-        print("PDF contains no pages.")
-
         return {
             "status": "failed",
-            "reason": "pdf_has_no_pages",
-            "pdf_path": pdf_path
+            "reason": "pdf_has_no_pages"
         }
 
 
@@ -185,23 +375,42 @@ def extract_direct_text(pdf_path):
     )
 
 
+    notice_folder = os.path.join(
+        output_folder,
+        "notice_candidates"
+    )
+
+
     os.makedirs(
         page_text_folder,
         exist_ok=True
     )
 
 
-    print("\nOutput folder:")
-    print(output_folder)
+    os.makedirs(
+        notice_folder,
+        exist_ok=True
+    )
+
+
+    print(
+        "\nOutput folder:"
+    )
+
+    print(
+        output_folder
+    )
 
 
     # ========================================================
-    # RESULT LISTS
+    # RESULT STORAGE
     # ========================================================
 
     all_pages = []
 
     ocr_required_pages = []
+
+    notice_candidate_pages = []
 
     usable_pages = 0
 
@@ -209,27 +418,30 @@ def extract_direct_text(pdf_path):
 
 
     # ========================================================
-    # PROCESS EVERY PDF PAGE
+    # PROCESS EVERY PAGE
     # ========================================================
 
-    for page_index, page in enumerate(
+    for page_number, page in enumerate(
         reader.pages,
         start=1
     ):
 
-        print("\n--------------------------------------")
+        print(
+            "\n--------------------------------------"
+        )
 
         print(
             f"Processing page "
-            f"{page_index}/{total_pages}"
+            f"{page_number}/{total_pages}"
         )
+
+
+        extraction_error = None
 
 
         # ----------------------------------------------------
         # DIRECT TEXT EXTRACTION
         # ----------------------------------------------------
-
-        extraction_error = None
 
         try:
 
@@ -249,16 +461,26 @@ def extract_direct_text(pdf_path):
             )
 
 
+        character_count = len(
+            text
+        )
+
+
+        total_characters += (
+            character_count
+        )
+
+
         # ----------------------------------------------------
-        # TEXT QUALITY CHECK
+        # CHECK TEXT QUALITY
         # ----------------------------------------------------
 
-        if extraction_error is not None:
+        if extraction_error:
 
             status = "needs_ocr"
 
             reason = (
-                "Direct text extraction failed: "
+                "Direct extraction failed: "
                 + extraction_error
             )
 
@@ -271,54 +493,153 @@ def extract_direct_text(pdf_path):
             )
 
 
-        character_count = len(
-            text
-        )
+        # ====================================================
+        # SAVE COMPLETE PAGE TEXT
+        # ====================================================
 
-
-        total_characters += (
-            character_count
-        )
-
-
-        # ----------------------------------------------------
-        # SAVE PAGE TEXT
-        # ----------------------------------------------------
-
-        text_filename = (
-            f"page_{page_index:03d}.txt"
-        )
-
-
-        text_file_path = os.path.join(
+        page_text_path = os.path.join(
             page_text_folder,
-            text_filename
+            f"page_{page_number:03d}.txt"
         )
 
 
         with open(
-            text_file_path,
+            page_text_path,
             "w",
             encoding="utf-8"
-        ) as text_file:
+        ) as file:
 
-            text_file.write(
+            file.write(
                 text
             )
 
 
-        # ----------------------------------------------------
-        # CREATE ONE RESULT FOR EVERY PAGE
-        # ----------------------------------------------------
+        # ====================================================
+        # KEYWORD / NOTICE CHECK
+        # ====================================================
+
+        primary_keywords = []
+
+        property_keywords = []
+
+        notice_candidate = False
+
+        notice_text = ""
+
+        notice_text_path = None
+
+
+        # Only search keywords if
+        # direct text is actually usable
+        if status == "usable":
+
+            (
+                primary_keywords,
+                property_keywords
+            ) = find_keywords(
+                text
+            )
+
+
+            notice_candidate = (
+                is_notice_candidate(
+                    primary_keywords,
+                    property_keywords
+                )
+            )
+
+
+            # ------------------------------------------------
+            # EXTRACT ONLY NOTICE-RELATED TEXT
+            # ------------------------------------------------
+
+            if notice_candidate:
+
+                notice_text = (
+                    extract_notice_context(
+                        text
+                    )
+                )
+
+
+                notice_text_path = (
+                    os.path.join(
+                        notice_folder,
+                        f"page_{page_number:03d}.txt"
+                    )
+                )
+
+
+                with open(
+                    notice_text_path,
+                    "w",
+                    encoding="utf-8"
+                ) as file:
+
+                    file.write(
+                        notice_text
+                    )
+
+
+                notice_candidate_pages.append({
+                    "page_number":
+                        page_number,
+
+                    "primary_keywords":
+                        primary_keywords,
+
+                    "property_keywords":
+                        property_keywords,
+
+                    "text":
+                        notice_text,
+
+                    "text_file":
+                        notice_text_path
+                })
+
+
+        # ====================================================
+        # SAVE PAGE RESULT
+        # ====================================================
 
         page_result = {
-            "page_number": page_index,
-            "method": "direct",
-            "status": status,
-            "text": text,
-            "character_count": character_count,
-            "text_file": text_file_path,
-            "reason": reason
+
+            "page_number":
+                page_number,
+
+            "method":
+                "direct",
+
+            "status":
+                status,
+
+            "character_count":
+                character_count,
+
+            "text":
+                text,
+
+            "text_file":
+                page_text_path,
+
+            "reason":
+                reason,
+
+            "notice_candidate":
+                notice_candidate,
+
+            "primary_keywords":
+                primary_keywords,
+
+            "property_keywords":
+                property_keywords,
+
+            "notice_text":
+                notice_text,
+
+            "notice_text_file":
+                notice_text_path
         }
 
 
@@ -327,22 +648,23 @@ def extract_direct_text(pdf_path):
         )
 
 
-        # ----------------------------------------------------
-        # OCR REQUIRED?
-        # ----------------------------------------------------
+        # ====================================================
+        # PRINT RESULT
+        # ====================================================
 
         if status == "needs_ocr":
 
-            ocr_record = {
-                "page_number": page_index,
-                "reason": reason,
-                "character_count": character_count
-            }
+            ocr_required_pages.append({
 
+                "page_number":
+                    page_number,
 
-            ocr_required_pages.append(
-                ocr_record
-            )
+                "reason":
+                    reason,
+
+                "character_count":
+                    character_count
+            })
 
 
             print(
@@ -364,44 +686,92 @@ def extract_direct_text(pdf_path):
                 "Result: DIRECT TEXT USABLE"
             )
 
+
             print(
                 "Characters extracted:",
                 character_count
             )
 
 
+            if notice_candidate:
+
+                print(
+                    "NOTICE CANDIDATE FOUND"
+                )
+
+
+                all_found = (
+                    primary_keywords
+                    + property_keywords
+                )
+
+
+                print(
+                    "Keywords:",
+                    ", ".join(
+                        all_found
+                    )
+                )
+
+
+            else:
+
+                print(
+                    "No notice candidate found"
+                )
+
+
     # ========================================================
     # SAVE direct_text.json
     # ========================================================
 
-    direct_text_result = {
-        "status": "success",
-        "pdf_path": pdf_path,
-        "total_pages": total_pages,
-        "usable_direct_pages": usable_pages,
-        "ocr_required_pages": len(
-            ocr_required_pages
-        ),
-        "total_characters": total_characters,
-        "pages": all_pages
+    direct_result = {
+
+        "status":
+            "success",
+
+        "pdf_path":
+            pdf_path,
+
+        "total_pages":
+            total_pages,
+
+        "usable_direct_pages":
+            usable_pages,
+
+        "ocr_required_pages":
+            len(
+                ocr_required_pages
+            ),
+
+        "notice_candidate_pages":
+            len(
+                notice_candidate_pages
+            ),
+
+        "total_characters":
+            total_characters,
+
+        "pages":
+            all_pages
     }
 
 
-    direct_text_json = os.path.join(
+    direct_json_path = os.path.join(
         output_folder,
         "direct_text.json"
     )
 
 
     with open(
-        direct_text_json,
+        direct_json_path,
         "w",
         encoding="utf-8"
-    ) as json_file:
+    ) as file:
 
         json.dump(
-            direct_text_result,
-            json_file,
+            direct_result,
+            file,
             indent=4,
             ensure_ascii=False
         )
@@ -412,30 +782,77 @@ def extract_direct_text(pdf_path):
     # ========================================================
 
     ocr_result = {
-        "pdf_path": pdf_path,
-        "total_pages": total_pages,
-        "ocr_required_count": len(
+
+        "pdf_path":
+            pdf_path,
+
+        "total_pages":
+            total_pages,
+
+        "ocr_required_count":
+            len(
+                ocr_required_pages
+            ),
+
+        "pages":
             ocr_required_pages
-        ),
-        "pages": ocr_required_pages
     }
 
 
-    ocr_json = os.path.join(
+    ocr_json_path = os.path.join(
         output_folder,
         "ocr_required_pages.json"
     )
 
 
     with open(
-        ocr_json,
+        ocr_json_path,
         "w",
         encoding="utf-8"
-    ) as json_file:
+    ) as file:
 
         json.dump(
             ocr_result,
-            json_file,
+            file,
+            indent=4,
+            ensure_ascii=False
+        )
+
+
+    # ========================================================
+    # SAVE notice_candidates.json
+    # ========================================================
+
+    notice_result = {
+
+        "pdf_path":
+            pdf_path,
+
+        "candidate_count":
+            len(
+                notice_candidate_pages
+            ),
+
+        "pages":
+            notice_candidate_pages
+    }
+
+
+    notice_json_path = os.path.join(
+        output_folder,
+        "notice_candidates.json"
+    )
+
+
+    with open(
+        notice_json_path,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            notice_result,
+            file,
             indent=4,
             ensure_ascii=False
         )
@@ -445,25 +862,50 @@ def extract_direct_text(pdf_path):
     # FINAL SUMMARY
     # ========================================================
 
-    print("\n======================================")
-    print("EXTRACTION FINISHED")
-    print("======================================")
+    print(
+        "\n======================================"
+    )
+
+    print(
+        "EXTRACTION FINISHED"
+    )
+
+    print(
+        "======================================"
+    )
+
 
     print(
         "\nTotal pages:",
         total_pages
     )
 
+
     print(
         "Usable direct-text pages:",
         usable_pages
     )
 
+
     print(
         "OCR required pages:",
-        len(ocr_required_pages)
+        len(
+            ocr_required_pages
+        )
     )
 
+
+    print(
+        "Notice candidate pages:",
+        len(
+            notice_candidate_pages
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # OCR PAGE NUMBERS
+    # --------------------------------------------------------
 
     if ocr_required_pages:
 
@@ -471,67 +913,91 @@ def extract_direct_text(pdf_path):
             "\nPages to send to Janvi:"
         )
 
-        page_numbers = [
-            str(page["page_number"])
-            for page
-            in ocr_required_pages
-        ]
 
         print(
             ", ".join(
-                page_numbers
+                str(
+                    page[
+                        "page_number"
+                    ]
+                )
+                for page
+                in ocr_required_pages
             )
         )
 
-    else:
+
+    # --------------------------------------------------------
+    # NOTICE PAGE NUMBERS
+    # --------------------------------------------------------
+
+    if notice_candidate_pages:
 
         print(
-            "\nNo pages currently "
-            "require OCR."
+            "\nPossible estate/public notice pages:"
+        )
+
+
+        print(
+            ", ".join(
+                str(
+                    page[
+                        "page_number"
+                    ]
+                )
+                for page
+                in notice_candidate_pages
+            )
         )
 
 
     print(
-        "\nDirect text result:"
+        "\nDirect text JSON:"
     )
 
     print(
-        direct_text_json
-    )
-
-
-    print(
-        "\nOCR required list:"
-    )
-
-    print(
-        ocr_json
+        direct_json_path
     )
 
 
     print(
-        "\nPage text files:"
+        "\nOCR required JSON:"
     )
 
     print(
-        page_text_folder
+        ocr_json_path
     )
 
 
-    # ========================================================
-    # RETURN RESULT
-    # ========================================================
+    print(
+        "\nNotice candidates JSON:"
+    )
+
+    print(
+        notice_json_path
+    )
+
 
     return {
-        "status": "success",
-        "pdf_path": pdf_path,
-        "total_pages": total_pages,
-        "usable_direct_pages": usable_pages,
-        "ocr_required_pages": len(
-            ocr_required_pages
-        ),
-        "direct_text_json": direct_text_json,
-        "ocr_required_json": ocr_json
+
+        "status":
+            "success",
+
+        "total_pages":
+            total_pages,
+
+        "usable_direct_pages":
+            usable_pages,
+
+        "ocr_required_pages":
+            len(
+                ocr_required_pages
+            ),
+
+        "notice_candidate_pages":
+            len(
+                notice_candidate_pages
+            )
     }
 
 
@@ -545,11 +1011,12 @@ if __name__ == "__main__":
         "\nPaste the full newspaper PDF path."
     )
 
+
     pdf_path = input(
         "PDF path: "
     ).strip()
 
 
-    extract_direct_text(
+    extract_pdf_text(
         pdf_path
     )
