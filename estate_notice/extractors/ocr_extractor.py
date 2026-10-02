@@ -160,7 +160,7 @@ def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
 	full_text_file = output_folder / "full_newspaper.txt"
 	with full_text_file.open("w", encoding="utf-8") as file:
 		for page in combined_pages:
-			file.write("\n\n" "====================================\n")
+			file.write("\n\n====================================\n")
 			file.write(f"PAGE {page['page_number']}\n")
 			file.write("====================================\n\n")
 			file.write(page["text"])
