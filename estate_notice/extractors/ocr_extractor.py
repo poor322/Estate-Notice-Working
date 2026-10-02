@@ -17,9 +17,7 @@ def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
 	if not direct_json_path.exists():
 		raise FileNotFoundError(f"direct_text.json not found: {direct_json_path}")
 	if not ocr_list_path.exists():
-		raise FileNotFoundError(
-			f"ocr_required_pages.json not found: {ocr_list_path}"
-		)
+		raise FileNotFoundError(f"ocr_required_pages.json not found: {ocr_list_path}")
 
 	print("\n======================================")
 	print("ESTATE NOTICE - OCR EXTRACTION")
