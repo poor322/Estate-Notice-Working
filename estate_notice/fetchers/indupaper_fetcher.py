@@ -21,7 +21,7 @@ URL = "https://www.indupaper.com/hindustan-times.html"
 
 BENCH_PATH = Path.home() / "frappe-bench"
 
-SITE_NAME = "site1.local"
+SITE_NAME = "ai-erpnext.local"
 
 AD_TIMEOUT_SECONDS = 300
 
@@ -509,7 +509,7 @@ def run():
 
 
         browser = playwright.chromium.launch(
-            headless=False
+            headless=True
         )
 
 
@@ -1165,6 +1165,7 @@ def run():
             print(
                 "\nPoornima fetcher completed successfully."
             )
+            return save_path
 
 
         # ====================================================
@@ -1201,12 +1202,13 @@ def run():
                     "for inspection."
                 )
 
-
             else:
 
                 print(
                     "\nBrowser/page was closed."
                 )
+            
+            raise error
 
 
         # ====================================================
@@ -1217,11 +1219,7 @@ def run():
 
             try:
 
-                input(
-                    "\nPress ENTER in terminal "
-                    "to close browser..."
-                )
-
+                pass
 
             finally:
 

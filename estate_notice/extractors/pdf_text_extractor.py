@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-SITE_NAME = "site1.local"
+SITE_NAME = "ai-erpnext.local"
 
 MIN_CHARACTERS = 80
 MIN_WORDS = 10
@@ -63,7 +63,7 @@ def ensure_within_root(
 		resolved_path.relative_to(resolved_root)
 
 	except ValueError as error:
-		raise ValueError(f"Path is outside the allowed directory: {resolved_root}") from error
+		raise ValueError(f"Path '{resolved_path}' is outside the allowed directory: '{resolved_root}'") from error
 
 	return resolved_path
 
