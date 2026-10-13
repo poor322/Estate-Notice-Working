@@ -6,7 +6,6 @@ from estate_notice.utils.deduplication import NoticeDeduplicator
 
 
 class TestNoticeDeduplicator(unittest.TestCase):
-
 	def setUp(self):
 		self.temp_dir = tempfile.TemporaryDirectory()
 		self.registry = Path(self.temp_dir.name) / "registry.json"
@@ -25,9 +24,7 @@ class TestNoticeDeduplicator(unittest.TestCase):
 
 	def test_normalized_text(self):
 		self.dedup.register("Public Notice Survey 123")
-		self.assertTrue(
-			self.dedup.is_duplicate(" PUBLIC   NOTICE SURVEY 123 ")
-		)
+		self.assertTrue(self.dedup.is_duplicate(" PUBLIC   NOTICE SURVEY 123 "))
 
 	def test_persistence_after_restart(self):
 		text = "Public notice survey 456"
