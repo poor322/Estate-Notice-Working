@@ -59,12 +59,14 @@ class TestNoticeDeduplicator(unittest.TestCase):
 	def test_unalerted_notice_can_be_retried(self):
 		text = "Public notice survey 103"
 		self.dedup.register(text)
+		self.assertTrue(self.dedup.needs_alert(text))
 
 		# Before a successful alert, it remains unalerted.
 		self.assertFalse(self.dedup.was_alerted(text))
 
 		# After a successful alert, it must not be alerted again.
 		self.dedup.mark_alerted(text)
+		self.assertFalse(self.dedup.needs_alert(text))
 		self.assertTrue(self.dedup.was_alerted(text))
 
 if __name__ == "__main__":
