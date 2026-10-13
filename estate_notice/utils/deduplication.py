@@ -1,7 +1,7 @@
 import hashlib
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 
 
 class NoticeDeduplicator:
@@ -77,6 +77,6 @@ class NoticeDeduplicator:
 		temporary_path = self.registry_path.with_suffix(".tmp")
 		temporary_path.write_text(
 			json.dumps(self.registry, indent=2, ensure_ascii=False),
-			encoding="utf-8"
+			encoding="utf-8",
 		)
 		temporary_path.replace(self.registry_path)
