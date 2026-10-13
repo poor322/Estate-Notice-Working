@@ -1,0 +1,44 @@
+{
+    "page_number": 3,
+    "detection": {
+        "is_notice": true,
+        "confidence": "HIGH",
+        "score": 100,
+        "matched_notice_terms": [
+            "public notice",
+            "notice is hereby given"
+        ],
+        "matched_property_terms": [
+            "property"
+        ],
+        "matched_action_terms": [
+            "claim",
+            "objection"
+        ],
+        "matched_identifiers": [
+            "survey no"
+        ],
+        "matched_party_terms": [
+            "advocate"
+        ],
+        "negative_signals": [],
+        "reasons": [
+            "Notice language detected",
+            "Property language detected",
+            "Legal action detected",
+            "Property identifier detected",
+            "Legal party detected",
+            "Notice + property context",
+            "Notice + property identifier",
+            "Property + identifier"
+        ]
+    },
+    "extraction": {
+        "survey_number": "123/4",
+        "plot_number": null,
+        "property_number": null,
+        "location": "Bengaluru",
+        "phone": "9876543210",
+        "email": "advocate@example.com"
+    }
+}
