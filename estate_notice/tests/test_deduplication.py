@@ -39,7 +39,6 @@ class TestNoticeDeduplicator(unittest.TestCase):
 		restarted = NoticeDeduplicator(self.registry)
 		self.assertTrue(restarted.was_alerted(text))
 
-	
 	def test_alert_not_sent_before_marking(self):
 		text = "Public notice survey 101"
 		self.dedup.register(text)
