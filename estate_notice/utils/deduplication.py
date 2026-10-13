@@ -17,15 +17,11 @@ class NoticeDeduplicator:
 			return {"notices": {}}
 
 		try:
-			data = json.loads(
-				self.registry_path.read_text(encoding="utf-8")
-			)
+			data = json.loads(self.registry_path.read_text(encoding="utf-8"))
 			if isinstance(data, dict) and isinstance(data.get("notices"), dict):
 				return data
 		except (json.JSONDecodeError, OSError):
-			raise RuntimeError(
-				f"Cannot safely read deduplication registry: {self.registry_path}"
-			)
+			raise RuntimeError(f"Cannot safely read deduplication registry: {self.registry_path}")
 
 		raise RuntimeError("Invalid deduplication registry format")
 
@@ -50,9 +46,7 @@ class NoticeDeduplicator:
 		if fingerprint in self.registry["notices"]:
 			return False
 
-		self.registry["notices"][fingerprint] = {
-			"status": "processed"
-		}
+		self.registry["notices"][fingerprint] = {"status": "processed"}
 
 		self._save_registry()
 		return True
