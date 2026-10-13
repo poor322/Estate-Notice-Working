@@ -67,6 +67,12 @@ class NoticeDeduplicator:
 		notice = self.registry["notices"].get(fingerprint)
 		return notice is not None and notice.get("status") == "alerted"
 
+	def needs_alert(self, text):
+		"""Return True when a registered notice has not been alerted."""
+		fingerprint = self.fingerprint(text)
+		notice = self.registry["notices"].get(fingerprint)
+		return notice is not None and notice.get("status") != "alerted"
+
 	def _save_registry(self):
 		temporary_path = self.registry_path.with_suffix(".tmp")
 		temporary_path.write_text(

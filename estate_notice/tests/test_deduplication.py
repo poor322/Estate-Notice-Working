@@ -39,9 +39,35 @@ class TestNoticeDeduplicator(unittest.TestCase):
 		restarted = NoticeDeduplicator(self.registry)
 		self.assertTrue(restarted.was_alerted(text))
 
+	def test_alert_not_sent_before_marking(self):
+		text = "Public notice survey 101"
+		self.dedup.register(text)
+		self.assertFalse(self.dedup.was_alerted(text))
+
+	def test_duplicate_registration_preserves_alert_status(self):
+		text = "Public notice survey 102"
+		self.dedup.register(text)
+		self.dedup.mark_alerted(text)
+
+		self.assertFalse(self.dedup.register(text))
+		self.assertTrue(self.dedup.was_alerted(text))
+
 	def test_empty_text(self):
 		with self.assertRaises(ValueError):
 			self.dedup.register("   ")
+
+	def test_unalerted_notice_can_be_retried(self):
+		text = "Public notice survey 103"
+		self.dedup.register(text)
+		self.assertTrue(self.dedup.needs_alert(text))
+
+		# Before a successful alert, it remains unalerted.
+		self.assertFalse(self.dedup.was_alerted(text))
+
+		# After a successful alert, it must not be alerted again.
+		self.dedup.mark_alerted(text)
+		self.assertFalse(self.dedup.needs_alert(text))
+		self.assertTrue(self.dedup.was_alerted(text))
 
 
 if __name__ == "__main__":
