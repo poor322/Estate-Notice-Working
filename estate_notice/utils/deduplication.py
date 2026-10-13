@@ -76,7 +76,7 @@ class NoticeDeduplicator:
 	def _save_registry(self):
 		temporary_path = self.registry_path.with_suffix(".tmp")
 		temporary_path.write_text(
-		json.dumps(self.registry, indent=2, ensure_ascii=False),
-		encoding="utf-8"
+			json.dumps(self.registry, indent=2, ensure_ascii=False),
+			encoding="utf-8",
 		)
 		temporary_path.replace(self.registry_path)
