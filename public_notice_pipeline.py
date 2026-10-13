@@ -1,13 +1,13 @@
 import argparse
-import cv2
 import json
-import re
-import pymupdf
-import numpy as np
-import pytesseract
 import os
-
+import re
 from pathlib import Path
+
+import cv2
+import numpy as np
+import pymupdf
+import pytesseract
 
 from estate_notice.utils.deduplication import NoticeDeduplicator
 
