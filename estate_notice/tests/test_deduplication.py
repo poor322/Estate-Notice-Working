@@ -55,7 +55,7 @@ class TestNoticeDeduplicator(unittest.TestCase):
 	def test_empty_text(self):
 		with self.assertRaises(ValueError):
 			self.dedup.register("   ")
-	
+
 	def test_unalerted_notice_can_be_retried(self):
 		text = "Public notice survey 103"
 		self.dedup.register(text)
@@ -68,6 +68,7 @@ class TestNoticeDeduplicator(unittest.TestCase):
 		self.dedup.mark_alerted(text)
 		self.assertFalse(self.dedup.needs_alert(text))
 		self.assertTrue(self.dedup.was_alerted(text))
+
 
 if __name__ == "__main__":
 	unittest.main()
