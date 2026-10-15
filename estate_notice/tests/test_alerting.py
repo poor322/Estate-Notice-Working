@@ -60,10 +60,11 @@ class TestAlerting(unittest.TestCase):
             mock_sender,
         )
 
-        self.assertEqual(results, ["sent", "sent"])
-        self.assertEqual(len(sender_calls), 2)
+        self.assertEqual(results, ["sent", "not_registered"])
+        self.assertEqual(sender_calls, [self.text])
         self.assertTrue(self.dedup.was_alerted(self.text))
-        self.assertTrue(self.dedup.was_alerted(other_text))
+        self.assertFalse(self.dedup.is_duplicate(other_text))
+
 
 
 if __name__ == "__main__":
