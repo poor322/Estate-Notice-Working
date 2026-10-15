@@ -9,8 +9,8 @@ import numpy as np
 import pymupdf
 import pytesseract
 
-from estate_notice.utils.deduplication import NoticeDeduplicator
 from estate_notice.utils.alerting import process_pending_alerts
+from estate_notice.utils.deduplication import NoticeDeduplicator
 
 parser = argparse.ArgumentParser(description="Automatic Public Notice Extraction")
 
