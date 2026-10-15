@@ -29,7 +29,7 @@ def process_pending_alerts(notices, deduplicator, sender):
 
         if not deduplicator.is_duplicate(text):
             results.append("not_registered")
-    continue
+            continue
 
         result = send_notice_alert(text, deduplicator, sender)
         results.append(result)
