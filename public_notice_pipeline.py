@@ -398,7 +398,45 @@ for page_info in scan["matching_pages"]:
                 f"candidate_{candidate_number}"
             )
 
-            if "PUBLICNOTICE" in clean_heading[:100]:
+            # A heading banner alone is not a complete notice.
+            # Require meaningful body text below the heading.
+            body_part = crop_gray[
+                min(150, crop_gray.shape[0]):,
+                :
+            ]
+
+            body_text = ""
+
+            if body_part.size > 0 and body_part.shape[0] >= 150:
+
+                enlarged_body = cv2.resize(
+                    body_part,
+                    None,
+                    fx=2,
+                    fy=2,
+                    interpolation=cv2.INTER_CUBIC
+                )
+
+                body_text = pytesseract.image_to_string(
+                    enlarged_body,
+                    config="--oem 3 --psm 6"
+                ).strip()
+
+            body_characters = len(
+                re.sub(
+                    r"[^A-Za-z0-9]",
+                    "",
+                    body_text
+                )
+            )
+
+            is_complete_notice = (
+                "PUBLICNOTICE" in clean_heading[:100]
+                and crop_gray.shape[0] >= 300
+                and body_characters >= 80
+            )
+
+            if is_complete_notice:
 
                 # Save detected notice image
                 cv2.imwrite(
