@@ -175,6 +175,42 @@ def extract_property_number(text):
     return None
 
 
+def extract_survey_numbers(text):
+    values = re.findall(
+        r"\b(?:survey\s*(?:no\.?|number)|sy\.?\s*no\.?)"
+        r"\s*[:#\-]?\s*"
+        r"([A-Z0-9]+(?:[/-][A-Z0-9]+)*)",
+        text,
+        re.IGNORECASE,
+    )
+
+    return unique(values)
+
+
+def extract_plot_numbers(text):
+    values = re.findall(
+        r"\bplot\s*(?:no\.?|number)"
+        r"\s*[:#\-]?\s*"
+        r"([A-Z0-9]+(?:[/-][A-Z0-9]+)*)",
+        text,
+        re.IGNORECASE,
+    )
+
+    return unique(values)
+
+
+def extract_house_numbers(text):
+    values = re.findall(
+        r"\bhouse\s*(?:no\.?|number)"
+        r"\s*[:#\-]?\s*"
+        r"([A-Z0-9]+(?:[/-][A-Z0-9]+)*)",
+        text,
+        re.IGNORECASE,
+    )
+
+    return unique(values)
+
+
 def extract_village(text):
     clean = compact(text)
 
@@ -406,6 +442,15 @@ def structure_notice(path):
 
             "property_address":
                 extract_property_address(text),
+
+            "survey_numbers":
+                extract_survey_numbers(text),
+
+            "plot_numbers":
+                extract_plot_numbers(text),
+
+            "house_numbers":
+                extract_house_numbers(text),
 
             "village":
                 extract_village(text),

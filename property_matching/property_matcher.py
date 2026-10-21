@@ -41,6 +41,51 @@ def match_property(property_record, notice):
     score = 0
 
     # -------------------------------------------------
+    # SURVEY NUMBER
+    # -------------------------------------------------
+
+    survey_number = property_record.get("survey_number")
+
+    if list_contains(
+        notice.get("survey_numbers", []),
+        survey_number,
+    ):
+        score += 40
+        reasons.append(
+            f"Survey number match: {survey_number}"
+        )
+
+    # -------------------------------------------------
+    # PLOT NUMBER
+    # -------------------------------------------------
+
+    plot_number = property_record.get("plot_number")
+
+    if list_contains(
+        notice.get("plot_numbers", []),
+        plot_number,
+    ):
+        score += 40
+        reasons.append(
+            f"Plot number match: {plot_number}"
+        )
+
+    # -------------------------------------------------
+    # HOUSE NUMBER
+    # -------------------------------------------------
+
+    house_number = property_record.get("house_number")
+
+    if list_contains(
+        notice.get("house_numbers", []),
+        house_number,
+    ):
+        score += 40
+        reasons.append(
+            f"House number match: {house_number}"
+        )
+
+    # -------------------------------------------------
     # PROPERTY NUMBER
     # -------------------------------------------------
 
@@ -212,7 +257,19 @@ def match_property(property_record, notice):
     # -------------------------------------------------
 
     strong_identifier_match = (
-        (
+        list_contains(
+            notice.get("survey_numbers", []),
+            survey_number,
+        )
+        or list_contains(
+            notice.get("plot_numbers", []),
+            plot_number,
+        )
+        or list_contains(
+            notice.get("house_numbers", []),
+            house_number,
+        )
+        or (
             registered_property_no
             and notice_property_no
             and registered_property_no
