@@ -1,0 +1,32 @@
+[
+    {
+        "property_id": "PROP-001",
+        "owner_name": "Ramesh Peruvemba Lakshman",
+        "property_number": "D-3",
+        "address": "D-3 Gulmohar Park, New Delhi",
+        "village": null,
+        "tehsil": null,
+        "mustatil_number": null,
+        "killa_number": null
+    },
+    {
+        "property_id": "PROP-002",
+        "owner_name": "Hawa Singh",
+        "property_number": null,
+        "address": null,
+        "village": "Dichaon Kalan",
+        "tehsil": "Najafgarh",
+        "mustatil_number": "71",
+        "killa_number": "3"
+    },
+    {
+        "property_id": "PROP-003",
+        "owner_name": "Example Owner",
+        "property_number": "A-100",
+        "address": "Dwarka, New Delhi",
+        "village": null,
+        "tehsil": null,
+        "mustatil_number": null,
+        "killa_number": null
+    }
+]
