@@ -1,9 +1,9 @@
 [project]
 name = "estate_notice"
 authors = [
-    { name = "Me", email = "me@example.com"}
+    { name = "GenEra", email = "noticeestate@gmail.com"}
 ]
-description = "Estate Notice App"
+description = "Notice Tracking and newspaper-alert system"
 requires-python = ">=3.14"
 readme = "README.md"
 dynamic = ["version"]

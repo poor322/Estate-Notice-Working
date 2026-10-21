@@ -53,3 +53,16 @@ jspm_packages/
 
 # Aider AI Chat
 .aider*
+
+# Local newspaper PDFs
+downloaded_newspaper.pdf
+
+# Local SQLite databases and backups
+notice_detection/*.db
+notice_detection/*.db-*
+notice_detection/*backup*
+notice_detection/*.backup
+
+# Generated Python cache
+__pycache__/
+*.py[cod]

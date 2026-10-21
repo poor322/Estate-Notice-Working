@@ -1,8 +1,8 @@
 app_name = "estate_notice"
 app_title = "Estate Notice"
-app_publisher = "Me"
-app_description = "Estate Notice App"
-app_email = "me@example.com"
+app_publisher = "GenEra"
+app_description = "Notice Tracking and newspaper-alert system"
+app_email = "noticeestate@gmail.com"
 app_license = "mit"
 
 # Apps
