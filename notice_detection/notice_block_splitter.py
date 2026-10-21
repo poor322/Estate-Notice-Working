@@ -15,7 +15,7 @@ from PIL import Image
 # CONFIGURATION
 # ============================================================
 
-SITE_NAME = "site1.local"
+SITE_NAME = "ai-erpnext.local"
 
 ALLOWED_PDF_ROOT = (
     Path.home()

@@ -10,8 +10,8 @@ from extractor import extract_notice_details
 # INPUT AND OUTPUT FILES
 # =========================================================
 
-INPUT_FILE = (
-    "/home/frappe-Poor/frappe-bench/sites/site1.local/"
+INPUT_FILE = os.path.expanduser(
+    "~/frappe-bench/sites/ai-erpnext.local/"
     "private/files/newspapers/manual_test/"
     "ocr_extraction/full_newspaper.txt"
 )
