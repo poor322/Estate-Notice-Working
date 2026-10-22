@@ -5,13 +5,17 @@ from datetime import datetime
 from pathlib import Path
 
 import fitz  # PyMuPDF
-
 from playwright.sync_api import (
-    sync_playwright,
-    Error as PlaywrightError,
-    TimeoutError as PlaywrightTimeoutError,
+	Error as PlaywrightError,
+)
+from playwright.sync_api import (
+	TimeoutError as PlaywrightTimeoutError,
+)
+from playwright.sync_api import (
+	sync_playwright,
 )
 
+from estate_notice.fetchers.sources import check_fetch_supported
 
 # ============================================================
 # CONFIGURATION
@@ -32,1206 +36,623 @@ DOWNLOAD_TIMEOUT_SECONDS = 900
 # CLICK VISIBLE TEXT
 # ============================================================
 
+
 def click_visible_text(page, text):
+	for frame in page.frames:
+		try:
+			matches = frame.get_by_text(text, exact=True)
 
-    for frame in page.frames:
+			for index in range(matches.count()):
+				control = matches.nth(index)
 
-        try:
+				if control.is_visible():
+					control.click(timeout=1500)
 
-            matches = frame.get_by_text(
-                text,
-                exact=True
-            )
+					return True
 
-            for index in range(matches.count()):
+		except PlaywrightError:
+			if page.is_closed():
+				raise
 
-                control = matches.nth(index)
+			continue
 
-                if control.is_visible():
-
-                    control.click(
-                        timeout=1500
-                    )
-
-                    return True
-
-        except PlaywrightError:
-
-            if page.is_closed():
-                raise
-
-            continue
-
-    return False
+	return False
 
 
 # ============================================================
 # FIND ADVERTISEMENT PROGRESS BAR
 # ============================================================
 
+
 def find_visible_progress_bar(page):
+	for frame in page.frames:
+		try:
+			bars = frame.locator("#progress-bar-inner")
 
-    for frame in page.frames:
+			for index in range(bars.count()):
+				bar = bars.nth(index)
 
-        try:
+				if bar.is_visible():
+					return bar
 
-            bars = frame.locator(
-                "#progress-bar-inner"
-            )
+		except PlaywrightError:
+			if page.is_closed():
+				raise
 
-            for index in range(bars.count()):
+			continue
 
-                bar = bars.nth(index)
-
-                if bar.is_visible():
-
-                    return bar
-
-        except PlaywrightError:
-
-            if page.is_closed():
-                raise
-
-            continue
-
-    return None
+	return None
 
 
 # ============================================================
 # HANDLE ADVERTISEMENT
 # ============================================================
 
+
 def handle_ad(page, detection_seconds=3):
+	detection_deadline = time.monotonic() + detection_seconds
 
-    detection_deadline = (
-        time.monotonic()
-        + detection_seconds
-    )
+	ad_started = False
 
-    ad_started = False
+	while time.monotonic() < detection_deadline:
+		if click_visible_text(page, "Click here to continue"):
+			print("\nAd: Continue clicked.", flush=True)
 
+			ad_started = True
 
-    while time.monotonic() < detection_deadline:
+			break
 
-        if click_visible_text(
-            page,
-            "Click here to continue"
-        ):
+		if find_visible_progress_bar(page) is not None:
+			print("\nAd: Running advertisement detected.", flush=True)
 
-            print(
-                "\nAd: Continue clicked.",
-                flush=True
-            )
+			ad_started = True
 
-            ad_started = True
+			break
 
-            break
+		page.wait_for_timeout(500)
 
+	if not ad_started:
+		return False
 
-        if find_visible_progress_bar(page) is not None:
+	if click_visible_text(page, "RESUME"):
+		print("Ad: Resumed.", flush=True)
 
-            print(
-                "\nAd: Running advertisement detected.",
-                flush=True
-            )
+	print("Ad: Waiting for progress to reach 100%...", flush=True)
 
-            ad_started = True
+	deadline = time.monotonic() + AD_TIMEOUT_SECONDS
 
-            break
+	last_width = None
 
+	progress_completed = False
 
-        page.wait_for_timeout(500)
+	while time.monotonic() < deadline:
+		if page.is_closed():
+			raise RuntimeError("The newspaper tab was closed.")
 
+		bar = find_visible_progress_bar(page)
 
-    if not ad_started:
+		if bar is None:
+			page.wait_for_timeout(500)
 
-        return False
+			continue
 
+		try:
+			width = bar.evaluate("(element) => element.style.width")
 
-    if click_visible_text(
-        page,
-        "RESUME"
-    ):
+		except PlaywrightError:
+			if page.is_closed():
+				raise
 
-        print(
-            "Ad: Resumed.",
-            flush=True
-        )
+			page.wait_for_timeout(500)
 
+			continue
 
-    print(
-        "Ad: Waiting for progress to reach 100%...",
-        flush=True
-    )
+		if width != last_width:
+			print(f"Ad progress: {width or 'waiting'}", flush=True)
 
+			last_width = width
 
-    deadline = (
-        time.monotonic()
-        + AD_TIMEOUT_SECONDS
-    )
+		percentage = None
 
-    last_width = None
+		if width.endswith("%"):
+			try:
+				percentage = float(width[:-1])
 
-    progress_completed = False
+			except ValueError:
+				pass
 
+		if percentage is not None and percentage >= 100:
+			print("Ad: 100% reached.", flush=True)
 
-    while time.monotonic() < deadline:
+			progress_completed = True
 
-        if page.is_closed():
+			page.wait_for_timeout(1500)
 
-            raise RuntimeError(
-                "The newspaper tab was closed."
-            )
+			break
 
+		page.wait_for_timeout(500)
 
-        bar = find_visible_progress_bar(
-            page
-        )
+	if not progress_completed:
+		raise RuntimeError("Advertisement did not reach 100% within 5 minutes.")
 
+	print("Ad: Looking for Close...", flush=True)
 
-        if bar is None:
+	close_deadline = time.monotonic() + 30
 
-            page.wait_for_timeout(500)
+	while time.monotonic() < close_deadline:
+		if click_visible_text(page, "Close"):
+			print("Ad: Close clicked.", flush=True)
 
-            continue
+			page.wait_for_timeout(1500)
 
+			return True
 
-        try:
+		page.wait_for_timeout(500)
 
-            width = bar.evaluate(
-                "(element) => element.style.width"
-            )
-
-        except PlaywrightError:
-
-            if page.is_closed():
-                raise
-
-            page.wait_for_timeout(500)
-
-            continue
-
-
-        if width != last_width:
-
-            print(
-                f"Ad progress: {width or 'waiting'}",
-                flush=True
-            )
-
-            last_width = width
-
-
-        percentage = None
-
-
-        if width.endswith("%"):
-
-            try:
-
-                percentage = float(
-                    width[:-1]
-                )
-
-            except ValueError:
-                pass
-
-
-        if (
-            percentage is not None
-            and percentage >= 100
-        ):
-
-            print(
-                "Ad: 100% reached.",
-                flush=True
-            )
-
-            progress_completed = True
-
-            page.wait_for_timeout(
-                1500
-            )
-
-            break
-
-
-        page.wait_for_timeout(
-            500
-        )
-
-
-    if not progress_completed:
-
-        raise RuntimeError(
-            "Advertisement did not reach "
-            "100% within 5 minutes."
-        )
-
-
-    print(
-        "Ad: Looking for Close...",
-        flush=True
-    )
-
-
-    close_deadline = (
-        time.monotonic()
-        + 30
-    )
-
-
-    while time.monotonic() < close_deadline:
-
-        if click_visible_text(
-            page,
-            "Close"
-        ):
-
-            print(
-                "Ad: Close clicked.",
-                flush=True
-            )
-
-            page.wait_for_timeout(
-                1500
-            )
-
-            return True
-
-
-        page.wait_for_timeout(
-            500
-        )
-
-
-    raise RuntimeError(
-        "Advertisement finished, "
-        "but Close could not be clicked."
-    )
+	raise RuntimeError("Advertisement finished, but Close could not be clicked.")
 
 
 # ============================================================
 # CLICK PDF BUTTON
 # ============================================================
 
-def click_pdf_when_ready(
-    page,
-    pdf_button
-):
 
-    deadline = (
-        time.monotonic()
-        + 360
-    )
+def click_pdf_when_ready(page, pdf_button):
+	deadline = time.monotonic() + 360
 
-    last_message = 0
+	last_message = 0
 
+	while time.monotonic() < deadline:
+		if page.is_closed():
+			raise RuntimeError("The newspaper tab was closed.")
 
-    while time.monotonic() < deadline:
+		handle_ad(page, detection_seconds=1)
 
-        if page.is_closed():
+		try:
+			pdf_button.click(trial=True, timeout=1500)
 
-            raise RuntimeError(
-                "The newspaper tab was closed."
-            )
+		except PlaywrightTimeoutError:
+			now = time.monotonic()
 
+			if now - last_message >= 15:
+				print("Waiting for PDF button...", flush=True)
 
-        handle_ad(
-            page,
-            detection_seconds=1
-        )
+				last_message = now
 
+			page.wait_for_timeout(500)
 
-        try:
+			continue
 
-            pdf_button.click(
-                trial=True,
-                timeout=1500
-            )
+		print("PDF button ready.", flush=True)
 
+		pdf_button.click(timeout=10000)
 
-        except PlaywrightTimeoutError:
+		return
 
-            now = time.monotonic()
-
-
-            if (
-                now - last_message
-                >= 15
-            ):
-
-                print(
-                    "Waiting for PDF button...",
-                    flush=True
-                )
-
-                last_message = now
-
-
-            page.wait_for_timeout(
-                500
-            )
-
-            continue
-
-
-        print(
-            "PDF button ready.",
-            flush=True
-        )
-
-
-        pdf_button.click(
-            timeout=10000
-        )
-
-
-        return
-
-
-    raise RuntimeError(
-        "PDF button remained unavailable."
-    )
+	raise RuntimeError("PDF button remained unavailable.")
 
 
 # ============================================================
 # GET PDF PAGE COUNT
 # ============================================================
 
+
 def get_pdf_page_count(pdf_path):
+	document = fitz.open(str(pdf_path))
 
-    document = fitz.open(
-        str(pdf_path)
-    )
+	try:
+		return document.page_count
 
-    try:
-
-        return document.page_count
-
-    finally:
-
-        document.close()
+	finally:
+		document.close()
 
 
 # ============================================================
 # MAIN
 # ============================================================
 
-def run():
 
-    today = datetime.now().strftime(
-        "%Y-%m-%d"
-    )
+def run(newspaper="Hindustan Times Delhi", edition_date=None, today=None):
+	# Callers inside Frappe pass the site's date as `today`,
+	# because the server clock may be on a different day.
+	today_date = today or datetime.now().date()
 
+	check_fetch_supported(newspaper, edition_date or today_date, today_date)
 
-    site_path = (
-        BENCH_PATH
-        / "sites"
-        / SITE_NAME
-    )
+	today = today_date.strftime("%Y-%m-%d")
 
+	site_path = BENCH_PATH / "sites" / SITE_NAME
 
-    if not site_path.is_dir():
+	if not site_path.is_dir():
+		raise RuntimeError(f"Frappe site folder not found:\n{site_path}\nCheck BENCH_PATH and SITE_NAME.")
 
-        raise RuntimeError(
-            f"Frappe site folder not found:\n"
-            f"{site_path}\n"
-            f"Check BENCH_PATH and SITE_NAME."
-        )
+	save_folder = site_path / "private" / "files" / "newspapers" / "hindustan_times" / today
 
+	save_folder.mkdir(parents=True, exist_ok=True)
 
-    save_folder = (
-        site_path
-        / "private"
-        / "files"
-        / "newspapers"
-        / "hindustan_times"
-        / today
-    )
+	save_path = save_folder / "hindustan_times_delhi.pdf"
 
+	temporary_path = save_folder / "hindustan_times_delhi.pdf.part"
 
-    save_folder.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+	print("\n======================================")
 
+	print("ESTATE NOTICE - NEWSPAPER FETCHER")
 
-    save_path = (
-        save_folder
-        / "hindustan_times_delhi.pdf"
-    )
+	print("======================================")
 
+	print(f"\nToday's date: {today}")
 
-    temporary_path = (
-        save_folder
-        / "hindustan_times_delhi.pdf.part"
-    )
+	print("\nPDF will be saved here:")
 
+	print(save_path)
 
-    print(
-        "\n======================================"
-    )
+	# ========================================================
+	# START PLAYWRIGHT
+	# ========================================================
 
-    print(
-        "ESTATE NOTICE - NEWSPAPER FETCHER"
-    )
+	with sync_playwright() as playwright:
+		print("\n1. Opening browser...")
 
-    print(
-        "======================================"
-    )
+		browser = playwright.chromium.launch(headless=True)
 
+		context = browser.new_context(accept_downloads=True)
 
-    print(
-        f"\nToday's date: {today}"
-    )
+		page = context.new_page()
 
+		try:
+			# =================================================
+			# OPEN WEBSITE
+			# =================================================
 
-    print(
-        "\nPDF will be saved here:"
-    )
+			print("2. Opening InduPaper...", flush=True)
 
+			page.goto(URL, wait_until="domcontentloaded", timeout=60000)
 
-    print(
-        save_path
-    )
+			print("3. InduPaper opened.", flush=True)
 
+			# =================================================
+			# ADVERTISEMENT
+			# =================================================
 
-    # ========================================================
-    # START PLAYWRIGHT
-    # ========================================================
+			print("4. Checking for advertisement...", flush=True)
 
-    with sync_playwright() as playwright:
+			if not handle_ad(page, detection_seconds=30):
+				print("No initial advertisement detected.")
 
-        print(
-            "\n1. Opening browser..."
-        )
+			# =================================================
+			# CITY
+			# =================================================
 
+			city = page.get_by_label("City", exact=True)
 
-        browser = playwright.chromium.launch(
-            headless=True
-        )
+			if city.count() > 0:
+				city.select_option(label="Delhi", timeout=30000)
 
+				print("5. City selected: Delhi", flush=True)
 
-        context = browser.new_context(
-            accept_downloads=True
-        )
+				page.wait_for_timeout(2000)
 
+			else:
+				print("5. Separate City field not found.")
 
-        page = context.new_page()
+			handle_ad(page, detection_seconds=1)
 
+			# =================================================
+			# SUB CITY
+			#
+			# IMPORTANT CHANGE:
+			# Select "Delhi"
+			# NOT "Delhi City"
+			# =================================================
 
-        try:
+			sub_city = page.get_by_label("Sub City", exact=True)
 
-            # =================================================
-            # OPEN WEBSITE
-            # =================================================
+			sub_city.wait_for(state="visible", timeout=30000)
 
-            print(
-                "2. Opening InduPaper...",
-                flush=True
-            )
+			# -------------------------------------------------
+			# THIS IS THE IMPORTANT FIX
+			# -------------------------------------------------
 
+			sub_city.select_option(label="Delhi", timeout=30000)
 
-            page.goto(
-                URL,
-                wait_until="domcontentloaded",
-                timeout=60000
-            )
+			print("6. Sub City selected: Delhi", flush=True)
 
+			page.wait_for_timeout(2000)
 
-            print(
-                "3. InduPaper opened.",
-                flush=True
-            )
+			# =================================================
+			# DOWNLOAD LISTENER
+			# =================================================
 
+			downloads = []
 
-            # =================================================
-            # ADVERTISEMENT
-            # =================================================
+			def handle_download(download):
+				downloads.append(download)
 
-            print(
-                "4. Checking for advertisement...",
-                flush=True
-            )
+				print(f"\nDOWNLOAD EVENT DETECTED ({len(downloads)})", flush=True)
 
+			page.on("download", handle_download)
 
-            if not handle_ad(
-                page,
-                detection_seconds=30
-            ):
+			# =================================================
+			# PDF BUTTON
+			# =================================================
 
-                print(
-                    "No initial advertisement detected."
-                )
+			pdf_button = page.get_by_role("button", name="⬇ PDF", exact=True)
 
+			print("7. Waiting for PDF button...", flush=True)
 
-            # =================================================
-            # CITY
-            # =================================================
+			click_pdf_when_ready(page, pdf_button)
 
-            city = page.get_by_label(
-                "City",
-                exact=True
-            )
+			print("8. PDF clicked.", flush=True)
 
+			print("\n======================================")
 
-            if city.count() > 0:
+			print("WAITING FOR ALL NEWSPAPER PAGES")
 
-                city.select_option(
-                    label="Delhi",
-                    timeout=30000
-                )
+			print("======================================")
 
+			# =================================================
+			# PROCESSING
+			# =================================================
 
-                print(
-                    "5. City selected: Delhi",
-                    flush=True
-                )
+			start_time = time.monotonic()
 
+			expected_pages = None
 
-                page.wait_for_timeout(
-                    2000
-                )
+			current_page = None
 
+			last_progress = None
 
-            else:
+			last_progress_time = time.monotonic()
 
-                print(
-                    "5. Separate City field not found."
-                )
+			processing_started = False
 
+			processing_finished = False
 
-            handle_ad(
-                page,
-                detection_seconds=1
-            )
+			download_notice_shown = False
 
+			while time.monotonic() - start_time < DOWNLOAD_TIMEOUT_SECONDS:
+				if page.is_closed():
+					raise RuntimeError("The newspaper tab closed before processing completed.")
 
-            # =================================================
-            # SUB CITY
-            #
-            # IMPORTANT CHANGE:
-            # Select "Delhi"
-            # NOT "Delhi City"
-            # =================================================
+				page.wait_for_timeout(1000)
 
-            sub_city = page.get_by_label(
-                "Sub City",
-                exact=True
-            )
+				# ---------------------------------------------
+				# CHECK AD
+				# ---------------------------------------------
 
+				handle_ad(page, detection_seconds=1)
 
-            sub_city.wait_for(
-                state="visible",
-                timeout=30000
-            )
+				# ---------------------------------------------
+				# READ PAGE
+				# ---------------------------------------------
 
+				try:
+					body_text = page.locator("body").inner_text(timeout=10000)
 
-            # -------------------------------------------------
-            # THIS IS THE IMPORTANT FIX
-            # -------------------------------------------------
+				except PlaywrightError:
+					continue
 
-            sub_city.select_option(
-                label="Delhi",
-                timeout=30000
-            )
+				# ---------------------------------------------
+				# LOOK FOR:
+				#
+				# Processing page 1/20
+				# ---------------------------------------------
 
+				match = re.search(
+					r"Processing\s+page\s+"
+					r"(\d+)\s*/\s*(\d+)",
+					body_text,
+					re.IGNORECASE,
+				)
 
-            print(
-                "6. Sub City selected: Delhi",
-                flush=True
-            )
+				if match:
+					processing_started = True
 
+					current_page = int(match.group(1))
 
-            page.wait_for_timeout(
-                2000
-            )
+					expected_pages = int(match.group(2))
 
+					progress = (current_page, expected_pages)
 
-            # =================================================
-            # DOWNLOAD LISTENER
-            # =================================================
+					if progress != last_progress:
+						print(f"Processing page {current_page}/{expected_pages}", flush=True)
 
-            downloads = []
+						last_progress = progress
 
+						last_progress_time = time.monotonic()
 
-            def handle_download(download):
+					# -----------------------------------------
+					# ALL PAGES FINISHED
+					# -----------------------------------------
 
-                downloads.append(
-                    download
-                )
+					if expected_pages is not None and current_page >= expected_pages:
+						print("\nWebsite reached final page:")
 
+						print(f"{current_page}/{expected_pages}")
 
-                print(
-                    f"\nDOWNLOAD EVENT DETECTED "
-                    f"({len(downloads)})",
-                    flush=True
-                )
+						processing_finished = True
 
+						page.wait_for_timeout(5000)
 
-            page.on(
-                "download",
-                handle_download
-            )
+						break
 
+				# ---------------------------------------------
+				# DOWNLOAD STARTED EARLY
+				# ---------------------------------------------
 
-            # =================================================
-            # PDF BUTTON
-            # =================================================
+				if len(downloads) > 0 and not processing_finished and not download_notice_shown:
+					print("\nDownload event appeared, but we are NOT stopping yet.")
 
-            pdf_button = page.get_by_role(
-                "button",
-                name="⬇ PDF",
-                exact=True
-            )
+					print("Waiting for newspaper processing to finish...")
 
+					download_notice_shown = True
 
-            print(
-                "7. Waiting for PDF button...",
-                flush=True
-            )
+				# ---------------------------------------------
+				# FALLBACK
+				# ---------------------------------------------
 
+				if (
+					processing_started
+					and len(downloads) > 0
+					and expected_pages is not None
+					and (time.monotonic() - last_progress_time > 20)
+				):
+					print("\nProcessing message disappeared.")
 
-            click_pdf_when_ready(
-                page,
-                pdf_button
-            )
+					print("A download exists, so the PDF will now be verified.")
 
+					break
 
-            print(
-                "8. PDF clicked.",
-                flush=True
-            )
+			# =================================================
+			# PROCESSING CHECK
+			# =================================================
 
+			if not processing_started:
+				print("\nWARNING:")
 
-            print(
-                "\n======================================"
-            )
+				print("Could not read 'Processing page X/Y'.")
 
-            print(
-                "WAITING FOR ALL NEWSPAPER PAGES"
-            )
+			# =================================================
+			# WAIT FOR DOWNLOAD
+			# =================================================
 
-            print(
-                "======================================"
-            )
+			print("\n9. Waiting for final PDF download...")
 
+			download_wait_start = time.monotonic()
 
-            # =================================================
-            # PROCESSING
-            # =================================================
+			while len(downloads) == 0:
+				if time.monotonic() - download_wait_start > 120:
+					raise RuntimeError("No PDF download was detected after newspaper processing.")
 
-            start_time = (
-                time.monotonic()
-            )
+				page.wait_for_timeout(1000)
 
+			print("Download detected.")
 
-            expected_pages = None
+			print("Waiting 5 seconds for any final download event...")
 
-            current_page = None
+			page.wait_for_timeout(5000)
 
-            last_progress = None
+			# Use last download
+			download = downloads[-1]
 
-            last_progress_time = (
-                time.monotonic()
-            )
+			print(f"Total download events detected: {len(downloads)}")
 
-            processing_started = False
+			# =================================================
+			# SAVE TEMPORARY PDF
+			# =================================================
 
-            processing_finished = False
+			print("\n10. Saving downloaded PDF...", flush=True)
 
-            download_notice_shown = False
+			try:
+				download.save_as(str(temporary_path))
 
+				# =============================================
+				# CHECK PDF HEADER
+				# =============================================
 
-            while (
-                time.monotonic()
-                - start_time
-                < DOWNLOAD_TIMEOUT_SECONDS
-            ):
+				with temporary_path.open("rb") as pdf_file:
+					header = pdf_file.read(1024)
 
+				if b"%PDF-" not in header:
+					raise RuntimeError("Downloaded file is not a valid PDF.")
 
-                if page.is_closed():
+				# =============================================
+				# CHECK ACTUAL PDF PAGE COUNT
+				# =============================================
 
-                    raise RuntimeError(
-                        "The newspaper tab closed "
-                        "before processing completed."
-                    )
+				actual_pages = get_pdf_page_count(temporary_path)
 
+				print("\n======================================")
 
-                page.wait_for_timeout(
-                    1000
-                )
+				print("PAGE COUNT CHECK")
 
+				print("======================================")
 
-                # ---------------------------------------------
-                # CHECK AD
-                # ---------------------------------------------
+				print("Pages reported by website:", expected_pages)
 
-                handle_ad(
-                    page,
-                    detection_seconds=1
-                )
+				print("Pages actually inside PDF:", actual_pages)
 
+				# =============================================
+				# VERIFY PAGE COUNT
+				# =============================================
 
-                # ---------------------------------------------
-                # READ PAGE
-                # ---------------------------------------------
+				if expected_pages is not None:
+					if actual_pages != expected_pages:
+						raise RuntimeError(
+							"\nINCOMPLETE PDF!\n"
+							f"Website reported "
+							f"{expected_pages} pages, "
+							f"but downloaded PDF contains "
+							f"only {actual_pages} pages."
+						)
 
-                try:
+				# =============================================
+				# SAVE FINAL PDF
+				# =============================================
 
-                    body_text = page.locator(
-                        "body"
-                    ).inner_text(
-                        timeout=10000
-                    )
+				os.replace(temporary_path, save_path)
 
+			finally:
+				if temporary_path.exists():
+					temporary_path.unlink()
 
-                except PlaywrightError:
+			# =================================================
+			# SUCCESS
+			# =================================================
 
-                    continue
+			print("\n======================================")
 
+			print("DOWNLOAD SUCCESSFUL")
 
-                # ---------------------------------------------
-                # LOOK FOR:
-                #
-                # Processing page 1/20
-                # ---------------------------------------------
+			print("======================================")
 
-                match = re.search(
-                    r"Processing\s+page\s+"
-                    r"(\d+)\s*/\s*(\d+)",
-                    body_text,
-                    re.IGNORECASE
-                )
+			print("Website pages:", expected_pages)
 
+			print("PDF pages:", actual_pages)
 
-                if match:
+			print("\nSaved here:")
 
-                    processing_started = True
+			print(save_path)
 
+			print("\nPoornima fetcher completed successfully.")
+			return save_path
 
-                    current_page = int(
-                        match.group(1)
-                    )
+		# ====================================================
+		# ERROR
+		# ====================================================
 
+		except Exception as error:
+			print("\n======================================")
 
-                    expected_pages = int(
-                        match.group(2)
-                    )
+			print("ERROR")
 
+			print("======================================")
 
-                    progress = (
-                        current_page,
-                        expected_pages
-                    )
+			print(error)
 
+			if browser.is_connected() and not page.is_closed():
+				print("\nBrowser kept open for inspection.")
 
-                    if (
-                        progress
-                        != last_progress
-                    ):
+			else:
+				print("\nBrowser/page was closed.")
 
-                        print(
-                            f"Processing page "
-                            f"{current_page}/"
-                            f"{expected_pages}",
-                            flush=True
-                        )
+			raise error
 
+		# ====================================================
+		# CLOSE
+		# ====================================================
 
-                        last_progress = (
-                            progress
-                        )
+		finally:
+			try:
+				pass
 
+			finally:
+				if browser.is_connected():
+					try:
+						context.close()
 
-                        last_progress_time = (
-                            time.monotonic()
-                        )
-
-
-                    # -----------------------------------------
-                    # ALL PAGES FINISHED
-                    # -----------------------------------------
-
-                    if (
-                        expected_pages is not None
-                        and current_page
-                        >= expected_pages
-                    ):
-
-                        print(
-                            "\nWebsite reached final page:"
-                        )
-
-
-                        print(
-                            f"{current_page}/"
-                            f"{expected_pages}"
-                        )
-
-
-                        processing_finished = True
-
-
-                        page.wait_for_timeout(
-                            5000
-                        )
-
-
-                        break
-
-
-                # ---------------------------------------------
-                # DOWNLOAD STARTED EARLY
-                # ---------------------------------------------
-
-                if (
-                    len(downloads) > 0
-                    and not processing_finished
-                    and not download_notice_shown
-                ):
-
-                    print(
-                        "\nDownload event appeared, "
-                        "but we are NOT stopping yet."
-                    )
-
-
-                    print(
-                        "Waiting for newspaper processing "
-                        "to finish..."
-                    )
-
-
-                    download_notice_shown = True
-
-
-                # ---------------------------------------------
-                # FALLBACK
-                # ---------------------------------------------
-
-                if (
-                    processing_started
-                    and len(downloads) > 0
-                    and expected_pages is not None
-                    and (
-                        time.monotonic()
-                        - last_progress_time
-                        > 20
-                    )
-                ):
-
-                    print(
-                        "\nProcessing message disappeared."
-                    )
-
-
-                    print(
-                        "A download exists, so the PDF "
-                        "will now be verified."
-                    )
-
-
-                    break
-
-
-            # =================================================
-            # PROCESSING CHECK
-            # =================================================
-
-            if not processing_started:
-
-                print(
-                    "\nWARNING:"
-                )
-
-
-                print(
-                    "Could not read "
-                    "'Processing page X/Y'."
-                )
-
-
-            # =================================================
-            # WAIT FOR DOWNLOAD
-            # =================================================
-
-            print(
-                "\n9. Waiting for final PDF download..."
-            )
-
-
-            download_wait_start = (
-                time.monotonic()
-            )
-
-
-            while len(downloads) == 0:
-
-                if (
-                    time.monotonic()
-                    - download_wait_start
-                    > 120
-                ):
-
-                    raise RuntimeError(
-                        "No PDF download was detected "
-                        "after newspaper processing."
-                    )
-
-
-                page.wait_for_timeout(
-                    1000
-                )
-
-
-            print(
-                "Download detected."
-            )
-
-
-            print(
-                "Waiting 5 seconds for any final "
-                "download event..."
-            )
-
-
-            page.wait_for_timeout(
-                5000
-            )
-
-
-            # Use last download
-            download = downloads[-1]
-
-
-            print(
-                f"Total download events detected: "
-                f"{len(downloads)}"
-            )
-
-
-            # =================================================
-            # SAVE TEMPORARY PDF
-            # =================================================
-
-            print(
-                "\n10. Saving downloaded PDF...",
-                flush=True
-            )
-
-
-            try:
-
-                download.save_as(
-                    str(temporary_path)
-                )
-
-
-                # =============================================
-                # CHECK PDF HEADER
-                # =============================================
-
-                with temporary_path.open(
-                    "rb"
-                ) as pdf_file:
-
-                    header = pdf_file.read(
-                        1024
-                    )
-
-
-                if b"%PDF-" not in header:
-
-                    raise RuntimeError(
-                        "Downloaded file is not "
-                        "a valid PDF."
-                    )
-
-
-                # =============================================
-                # CHECK ACTUAL PDF PAGE COUNT
-                # =============================================
-
-                actual_pages = (
-                    get_pdf_page_count(
-                        temporary_path
-                    )
-                )
-
-
-                print(
-                    "\n======================================"
-                )
-
-                print(
-                    "PAGE COUNT CHECK"
-                )
-
-                print(
-                    "======================================"
-                )
-
-
-                print(
-                    "Pages reported by website:",
-                    expected_pages
-                )
-
-
-                print(
-                    "Pages actually inside PDF:",
-                    actual_pages
-                )
-
-
-                # =============================================
-                # VERIFY PAGE COUNT
-                # =============================================
-
-                if expected_pages is not None:
-
-                    if (
-                        actual_pages
-                        != expected_pages
-                    ):
-
-                        raise RuntimeError(
-                            "\nINCOMPLETE PDF!\n"
-                            f"Website reported "
-                            f"{expected_pages} pages, "
-                            f"but downloaded PDF contains "
-                            f"only {actual_pages} pages."
-                        )
-
-
-                # =============================================
-                # SAVE FINAL PDF
-                # =============================================
-
-                os.replace(
-                    temporary_path,
-                    save_path
-                )
-
-
-            finally:
-
-                if temporary_path.exists():
-
-                    temporary_path.unlink()
-
-
-            # =================================================
-            # SUCCESS
-            # =================================================
-
-            print(
-                "\n======================================"
-            )
-
-            print(
-                "DOWNLOAD SUCCESSFUL"
-            )
-
-            print(
-                "======================================"
-            )
-
-
-            print(
-                "Website pages:",
-                expected_pages
-            )
-
-
-            print(
-                "PDF pages:",
-                actual_pages
-            )
-
-
-            print(
-                "\nSaved here:"
-            )
-
-
-            print(
-                save_path
-            )
-
-
-            print(
-                "\nPoornima fetcher completed successfully."
-            )
-            return save_path
-
-
-        # ====================================================
-        # ERROR
-        # ====================================================
-
-        except Exception as error:
-
-            print(
-                "\n======================================"
-            )
-
-            print(
-                "ERROR"
-            )
-
-            print(
-                "======================================"
-            )
-
-
-            print(
-                error
-            )
-
-
-            if (
-                browser.is_connected()
-                and not page.is_closed()
-            ):
-
-                print(
-                    "\nBrowser kept open "
-                    "for inspection."
-                )
-
-            else:
-
-                print(
-                    "\nBrowser/page was closed."
-                )
-            
-            raise error
-
-
-        # ====================================================
-        # CLOSE
-        # ====================================================
-
-        finally:
-
-            try:
-
-                pass
-
-            finally:
-
-                if browser.is_connected():
-
-                    try:
-
-                        context.close()
-
-                    finally:
-
-                        browser.close()
+					finally:
+						browser.close()
 
 
 # ============================================================
@@ -1239,5 +660,4 @@ def run():
 # ============================================================
 
 if __name__ == "__main__":
-
-    run()
+	run()

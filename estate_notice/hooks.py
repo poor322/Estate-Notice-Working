@@ -155,6 +155,14 @@ app_license = "mit"
 # Scheduled Tasks
 # ---------------
 
+scheduler_events = {
+	"cron": {
+		"*/5 * * * *": [
+			"estate_notice.job_status.check_stuck_jobs",
+		],
+	},
+}
+
 # scheduler_events = {
 # 	"all": [
 # 		"estate_notice.tasks.all"
@@ -262,3 +270,10 @@ app_license = "mit"
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+
+# Fixtures
+# --------
+
+# The Estate Notice Job controller now queues runs itself; the old
+# "Run Estate Notice Fetcher" Server Script is removed by a patch.
+fixtures = []

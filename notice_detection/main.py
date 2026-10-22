@@ -3,91 +3,62 @@ import json
 from detector import detect_notice
 from extractor import extract_notice_details
 
-
 # ============================================
 # PROCESS ONE NEWSPAPER PAGE
 # ============================================
 
+
 def process_page(page_number, text):
+	print()
+	print("=" * 60)
+	print("PROCESSING PAGE:", page_number)
+	print("=" * 60)
 
-    print()
-    print("=" * 60)
-    print("PROCESSING PAGE:", page_number)
-    print("=" * 60)
+	# ----------------------------------------
+	# STEP 1: DETECT NOTICE
+	# ----------------------------------------
 
-    # ----------------------------------------
-    # STEP 1: DETECT NOTICE
-    # ----------------------------------------
+	detection = detect_notice(text)
 
-    detection = detect_notice(text)
+	print()
+	print("NOTICE DETECTION")
+	print("-" * 60)
 
-    print()
-    print("NOTICE DETECTION")
-    print("-" * 60)
+	print("Notice detected:", detection["is_notice"])
 
-    print(
-        "Notice detected:",
-        detection["is_notice"]
-    )
+	print("Confidence:", detection["confidence"])
 
-    print(
-        "Confidence:",
-        detection["confidence"]
-    )
+	print("Score:", detection["score"])
 
-    print(
-        "Score:",
-        detection["score"]
-    )
+	print("Reasons:", detection["reasons"])
 
-    print(
-        "Reasons:",
-        detection["reasons"]
-    )
+	# ----------------------------------------
+	# STEP 2: EXTRACT DETAILS
+	# ----------------------------------------
 
-    # ----------------------------------------
-    # STEP 2: EXTRACT DETAILS
-    # ----------------------------------------
+	if detection["is_notice"]:
+		details = extract_notice_details(text)
 
-    if detection["is_notice"]:
+		print()
+		print("EXTRACTED INFORMATION")
+		print("-" * 60)
 
-        details = extract_notice_details(text)
+		for key, value in details.items():
+			print(key, ":", value)
 
-        print()
-        print("EXTRACTED INFORMATION")
-        print("-" * 60)
+	else:
+		details = {}
 
-        for key, value in details.items():
+		print()
+		print("This page is NOT treated as a notice.")
 
-            print(
-                key,
-                ":",
-                value
-            )
+	# ----------------------------------------
+	# STEP 3: FINAL JSON RESULT
+	# ----------------------------------------
 
-    else:
+	result = {"page_number": page_number, "detection": detection, "extraction": details}
 
-        details = {}
-
-        print()
-        print(
-            "This page is NOT treated as a notice."
-        )
-
-    # ----------------------------------------
-    # STEP 3: FINAL JSON RESULT
-    # ----------------------------------------
-
-    result = {
-
-        "page_number": page_number,
-
-        "detection": detection,
-
-        "extraction": details
-    }
-
-    return result
+	return result
 
 
 # ============================================
@@ -95,8 +66,7 @@ def process_page(page_number, text):
 # ============================================
 
 if __name__ == "__main__":
-
-    sample_text = """
+	sample_text = """
 
     PUBLIC NOTICE
 
@@ -113,49 +83,33 @@ if __name__ == "__main__":
 
     """
 
-    # ----------------------------------------
-    # PROCESS PAGE
-    # ----------------------------------------
+	# ----------------------------------------
+	# PROCESS PAGE
+	# ----------------------------------------
 
-    result = process_page(
-        page_number=3,
-        text=sample_text
-    )
+	result = process_page(page_number=3, text=sample_text)
 
-    # ----------------------------------------
-    # PRINT FINAL RESULT
-    # ----------------------------------------
+	# ----------------------------------------
+	# PRINT FINAL RESULT
+	# ----------------------------------------
 
-    print()
-    print("=" * 60)
-    print("FINAL RESULT")
-    print("=" * 60)
+	print()
+	print("=" * 60)
+	print("FINAL RESULT")
+	print("=" * 60)
 
-    print(
-        json.dumps(
-            result,
-            indent=4
-        )
-    )
+	print(json.dumps(result, indent=4))
 
-    # ----------------------------------------
-    # SAVE JSON FILE
-    # ----------------------------------------
+	# ----------------------------------------
+	# SAVE JSON FILE
+	# ----------------------------------------
 
-    with open(
-        "notice_results.json",
-        "w",
-        encoding="utf-8"
-    ) as file:
+	# Audited file access: fixed output file for this demo script.
 
-        json.dump(
-            result,
-            file,
-            indent=4,
-            ensure_ascii=False
-        )
+	with open(  # nosemgrep
+		"notice_results.json", "w", encoding="utf-8"
+	) as file:
+		json.dump(result, file, indent=4, ensure_ascii=False)
 
-    print()
-    print(
-        "Result saved to notice_results.json"
-    )
+	print()
+	print("Result saved to notice_results.json")

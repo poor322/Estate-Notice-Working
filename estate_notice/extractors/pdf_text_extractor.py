@@ -63,7 +63,9 @@ def ensure_within_root(
 		resolved_path.relative_to(resolved_root)
 
 	except ValueError as error:
-		raise ValueError(f"Path '{resolved_path}' is outside the allowed directory: '{resolved_root}'") from error
+		raise ValueError(
+			f"Path '{resolved_path}' is outside the allowed directory: '{resolved_root}'"
+		) from error
 
 	return resolved_path
 
@@ -267,7 +269,13 @@ def extract_notice_context(
 
 def extract_pdf_text(
 	pdf_path,
+	output_folder=None,
 ):
+	"""Extract the text layer page by page.
+
+	Outputs go to `output_folder` when given (it must be inside the estate_notice
+	files folder), otherwise to direct_extraction/<pdf name>/.
+	"""
 	print("\n======================================")
 
 	print("ESTATE NOTICE - PDF TEXT EXTRACTION")
@@ -323,9 +331,12 @@ def extract_pdf_text(
 
 	output_root = get_output_root()
 
-	newspaper_name = safe_name(pdf_path.stem)
+	if output_folder:
+		output_folder = Path(output_folder).resolve()
+	else:
+		newspaper_name = safe_name(pdf_path.stem)
 
-	output_folder = (output_root / "direct_extraction" / newspaper_name).resolve()
+		output_folder = (output_root / "direct_extraction" / newspaper_name).resolve()
 
 	ensure_within_root(
 		output_folder,
