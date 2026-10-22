@@ -221,9 +221,8 @@ def detect_from_json(input_path, output_path):
     Run notice detection over page-wise extracted text.
     """
 
-    with open(
+    with open(  # nosemgrep: paths come from the CLI or the job's own output folder
         input_path,
-        "r",
         encoding="utf-8",
     ) as file:
         data = json.load(file)
@@ -255,7 +254,7 @@ def detect_from_json(input_path, output_path):
         "all_results": results,
     }
 
-    with open(
+    with open(  # nosemgrep: paths come from the CLI or the job's own output folder
         output_path,
         "w",
         encoding="utf-8",

@@ -371,10 +371,6 @@ def detect_banner_rectangles(
         cv2.COLOR_RGB2BGR,
     )
 
-    page_height = bgr.shape[
-        0
-    ]
-
     page_width = bgr.shape[
         1
     ]

@@ -32,9 +32,8 @@ def read_newspaper():
 
         return None
 
-    with open(
+    with open(  # nosemgrep: fixed input path defined in this script
         INPUT_FILE,
-        "r",
         encoding="utf-8"
     ) as file:
 
@@ -736,7 +735,7 @@ def process_newspaper():
     # Save JSON
     # -----------------------------------------------------
 
-    with open(
+    with open(  # nosemgrep: fixed output path defined in this script
         OUTPUT_FILE,
         "w",
         encoding="utf-8"

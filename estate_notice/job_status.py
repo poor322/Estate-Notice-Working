@@ -25,15 +25,13 @@ STALE_HEARTBEAT_MINUTES = 10
 
 
 def reconnect_db():
-	"""Drop the current database connection and open a new one as the same user."""
-	user = frappe.session.user if getattr(frappe.local, "session", None) else "Administrator"
+	"""Drop the current database connection and open a new one."""
 	for close in (frappe.db.rollback, frappe.db.close):
 		try:
 			close()
 		except Exception:
 			pass
 	frappe.connect()
-	frappe.set_user(user)
 
 
 def set_job_values(doc_name, **values):

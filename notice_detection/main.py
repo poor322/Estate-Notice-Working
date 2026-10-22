@@ -142,7 +142,7 @@ if __name__ == "__main__":
     # SAVE JSON FILE
     # ----------------------------------------
 
-    with open(
+    with open(  # nosemgrep: fixed output file for this demo script
         "notice_results.json",
         "w",
         encoding="utf-8"

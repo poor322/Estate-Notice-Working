@@ -71,7 +71,7 @@ def run_fetcher_job(doc_name=None):
             if failed_pages and len(failed_pages) == ocr["ocr_page_count"]:
                 raise RuntimeError(f"OCR failed on all {len(failed_pages)} pages.")
             text_json = Path(ocr["combined_file"])
-            failed_note = f" Pages that failed OCR: {', '.join(map(str, failed_pages))}" if failed_pages else ""
+            failed_note = f" Pages that failed OCR: {', '.join(str(page) for page in failed_pages)}" if failed_pages else ""
             log.add("OCR finished." + failed_note)
 
         detection = detect_from_json(str(text_json), str(output_folder / "notice_detection.json"))
