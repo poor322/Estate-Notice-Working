@@ -63,7 +63,9 @@ def ensure_within_root(
 		resolved_path.relative_to(resolved_root)
 
 	except ValueError as error:
-		raise ValueError(f"Path '{resolved_path}' is outside the allowed directory: '{resolved_root}'") from error
+		raise ValueError(
+			f"Path '{resolved_path}' is outside the allowed directory: '{resolved_root}'"
+		) from error
 
 	return resolved_path
 

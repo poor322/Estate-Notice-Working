@@ -5,15 +5,14 @@ import re
 from detector import detect_notice
 from extractor import extract_notice_details
 
-
 # =========================================================
 # INPUT AND OUTPUT FILES
 # =========================================================
 
 INPUT_FILE = os.path.expanduser(
-    "~/frappe-bench/sites/ai-erpnext.local/"
-    "private/files/newspapers/manual_test/"
-    "ocr_extraction/full_newspaper.txt"
+	"~/frappe-bench/sites/ai-erpnext.local/"
+	"private/files/newspapers/manual_test/"
+	"ocr_extraction/full_newspaper.txt"
 )
 
 OUTPUT_FILE = "notice_detection/newspaper_notice_results.json"
@@ -23,766 +22,476 @@ OUTPUT_FILE = "notice_detection/newspaper_notice_results.json"
 # READ NEWSPAPER TEXT
 # =========================================================
 
+
 def read_newspaper():
+	if not os.path.exists(INPUT_FILE):
+		print("ERROR: Newspaper text file not found.")
+		print(INPUT_FILE)
 
-    if not os.path.exists(INPUT_FILE):
+		return None
 
-        print("ERROR: Newspaper text file not found.")
-        print(INPUT_FILE)
+	# Audited file access: fixed input path defined in this script.
 
-        return None
-
-    with open(  # nosemgrep: fixed input path defined in this script
-        INPUT_FILE,
-        encoding="utf-8"
-    ) as file:
-
-        return file.read()
+	with open(  # nosemgrep
+		INPUT_FILE, encoding="utf-8"
+	) as file:
+		return file.read()
 
 
 # =========================================================
 # SPLIT NEWSPAPER INTO PAGES
 # =========================================================
 
+
 def split_pages(text):
+	pages = []
 
-    pages = []
+	current_page_number = None
+	current_page_lines = []
 
-    current_page_number = None
-    current_page_lines = []
+	for line in text.splitlines():
+		line = line.strip()
 
-    for line in text.splitlines():
+		page_match = re.match(r"^PAGE\s+(\d+)\s*$", line, re.IGNORECASE)
 
-        line = line.strip()
+		if page_match:
+			# Save previous page
+			if current_page_number is not None:
+				pages.append(
+					{"page_number": current_page_number, "text": "\n".join(current_page_lines).strip()}
+				)
 
-        page_match = re.match(
-            r"^PAGE\s+(\d+)\s*$",
-            line,
-            re.IGNORECASE
-        )
+			current_page_number = int(page_match.group(1))
 
-        if page_match:
+			current_page_lines = []
 
-            # Save previous page
-            if current_page_number is not None:
+			continue
 
-                pages.append({
-                    "page_number": current_page_number,
-                    "text": "\n".join(
-                        current_page_lines
-                    ).strip()
-                })
+		# Ignore separator lines
+		if line == "====================================":
+			continue
 
-            current_page_number = int(
-                page_match.group(1)
-            )
+		# Add text to current page
+		if current_page_number is not None and line:
+			current_page_lines.append(line)
 
-            current_page_lines = []
+	# Save final page
+	if current_page_number is not None:
+		pages.append({"page_number": current_page_number, "text": "\n".join(current_page_lines).strip()})
 
-            continue
-
-        # Ignore separator lines
-        if line == "====================================":
-
-            continue
-
-        # Add text to current page
-        if current_page_number is not None and line:
-
-            current_page_lines.append(line)
-
-    # Save final page
-    if current_page_number is not None:
-
-        pages.append({
-            "page_number": current_page_number,
-            "text": "\n".join(
-                current_page_lines
-            ).strip()
-        })
-
-    return pages
+	return pages
 
 
 # =========================================================
 # FIND POSSIBLE NOTICE SECTIONS
 # =========================================================
 
+
 def find_notice_sections(text):
+	lines = text.splitlines()
 
-    lines = text.splitlines()
+	keywords = [
+		"public notice",
+		"public notices",
+		"legal notice",
+		"legal notices",
+		"court notice",
+		"court notices",
+		"auction notice",
+		"auction notices",
+		"claims and objections",
+		"claim and objection",
+	]
 
-    keywords = [
+	sections = []
 
-        "public notice",
-        "public notices",
+	for index, line in enumerate(lines):
+		lower_line = line.lower()
 
-        "legal notice",
-        "legal notices",
+		found = False
 
-        "court notice",
-        "court notices",
+		for keyword in keywords:
+			if keyword in lower_line:
+				found = True
+				break
 
-        "auction notice",
-        "auction notices",
+		if not found:
+			continue
 
-        "claims and objections",
-        "claim and objection"
+		# Keep some lines before and after
+		# the notice heading.
+		start = max(0, index - 5)
 
-    ]
+		end = min(len(lines), index + 40)
 
-    sections = []
+		section_text = "\n".join(lines[start:end]).strip()
 
-    for index, line in enumerate(lines):
+		sections.append({"start_line": start + 1, "end_line": end, "text": section_text})
 
-        lower_line = line.lower()
-
-        found = False
-
-        for keyword in keywords:
-
-            if keyword in lower_line:
-
-                found = True
-                break
-
-        if not found:
-
-            continue
-
-        # Keep some lines before and after
-        # the notice heading.
-        start = max(
-            0,
-            index - 5
-        )
-
-        end = min(
-            len(lines),
-            index + 40
-        )
-
-        section_text = "\n".join(
-            lines[start:end]
-        ).strip()
-
-        sections.append({
-
-            "start_line":
-                start + 1,
-
-            "end_line":
-                end,
-
-            "text":
-                section_text
-
-        })
-
-    return sections
+	return sections
 
 
 # =========================================================
 # REMOVE DUPLICATE SECTIONS
 # =========================================================
 
+
 def remove_duplicate_sections(sections):
+	unique = []
 
-    unique = []
+	seen = set()
 
-    seen = set()
+	for section in sections:
+		section_text = section["text"]
 
-    for section in sections:
+		if section_text not in seen:
+			seen.add(section_text)
 
-        section_text = section["text"]
+			unique.append(section)
 
-        if section_text not in seen:
-
-            seen.add(section_text)
-
-            unique.append(section)
-
-    return unique
+	return unique
 
 
 # =========================================================
 # SPLIT A NOTICE SECTION INTO SMALLER BLOCKS
 # =========================================================
 
+
 def split_notice_into_blocks(section_text):
+	lines = section_text.splitlines()
 
-    lines = section_text.splitlines()
+	blocks = []
 
-    blocks = []
+	current_block = []
 
-    current_block = []
+	boundary_terms = [
+		"public notice",
+		"public notices",
+		"legal notice",
+		"legal notices",
+		"court notice",
+		"court notices",
+		"auction notice",
+		"auction notices",
+		"notice is hereby",
+		"notice hereby",
+		"claims and objections",
+		# Advertisement boundaries
+		"sale or rent",
+		"classifieds",
+		"property related ads",
+		"to book your",
+	]
 
-    boundary_terms = [
+	for line in lines:
+		clean_line = line.strip()
 
-        "public notice",
-        "public notices",
+		if not clean_line:
+			continue
 
-        "legal notice",
-        "legal notices",
+		lower_line = clean_line.lower()
 
-        "court notice",
-        "court notices",
+		is_boundary = False
 
-        "auction notice",
-        "auction notices",
+		for term in boundary_terms:
+			if term in lower_line:
+				is_boundary = True
+				break
 
-        "notice is hereby",
-        "notice hereby",
+		# If another strong heading appears,
+		# finish the previous block.
+		if is_boundary and current_block:
+			blocks.append("\n".join(current_block).strip())
 
-        "claims and objections",
+			current_block = []
 
-        # Advertisement boundaries
-        "sale or rent",
-        "classifieds",
-        "property related ads",
-        "to book your"
+		current_block.append(clean_line)
 
-    ]
+	# Add final block
+	if current_block:
+		blocks.append("\n".join(current_block).strip())
 
-    for line in lines:
+	# Remove extremely small blocks
+	cleaned_blocks = []
 
-        clean_line = line.strip()
+	for block in blocks:
+		if len(block.strip()) >= 30:
+			cleaned_blocks.append(block)
 
-        if not clean_line:
-
-            continue
-
-        lower_line = clean_line.lower()
-
-        is_boundary = False
-
-        for term in boundary_terms:
-
-            if term in lower_line:
-
-                is_boundary = True
-                break
-
-        # If another strong heading appears,
-        # finish the previous block.
-        if is_boundary and current_block:
-
-            blocks.append(
-                "\n".join(
-                    current_block
-                ).strip()
-            )
-
-            current_block = []
-
-        current_block.append(
-            clean_line
-        )
-
-    # Add final block
-    if current_block:
-
-        blocks.append(
-            "\n".join(
-                current_block
-            ).strip()
-        )
-
-    # Remove extremely small blocks
-    cleaned_blocks = []
-
-    for block in blocks:
-
-        if len(block.strip()) >= 30:
-
-            cleaned_blocks.append(
-                block
-            )
-
-    return cleaned_blocks
+	return cleaned_blocks
 
 
 # =========================================================
 # DETERMINE EXTRACTION QUALITY
 # =========================================================
 
+
 def evaluate_extraction(extraction):
+	important_fields = ["survey_number", "plot_number", "property_number", "location", "phone", "email"]
 
-    important_fields = [
+	available_fields = []
 
-        "survey_number",
-        "plot_number",
-        "property_number",
-        "location",
-        "phone",
-        "email"
+	missing_fields = []
 
-    ]
+	for field in important_fields:
+		value = extraction.get(field)
 
-    available_fields = []
+		if value:
+			available_fields.append(field)
 
-    missing_fields = []
+		else:
+			missing_fields.append(field)
 
-    for field in important_fields:
+	# -----------------------------------------------------
+	# COMPLETE
+	# -----------------------------------------------------
 
-        value = extraction.get(
-            field
-        )
+	if len(available_fields) >= 3:
+		extraction_status = "COMPLETE"
 
-        if value:
+		needs_review = False
 
-            available_fields.append(
-                field
-            )
+	# -----------------------------------------------------
+	# PARTIAL
+	# -----------------------------------------------------
 
-        else:
+	elif len(available_fields) >= 1:
+		extraction_status = "PARTIAL"
 
-            missing_fields.append(
-                field
-            )
+		needs_review = True
 
-    # -----------------------------------------------------
-    # COMPLETE
-    # -----------------------------------------------------
+	# -----------------------------------------------------
+	# NOTHING EXTRACTED
+	# -----------------------------------------------------
 
-    if len(available_fields) >= 3:
+	else:
+		extraction_status = "NO_DETAILS_EXTRACTED"
 
-        extraction_status = "COMPLETE"
+		needs_review = True
 
-        needs_review = False
-
-    # -----------------------------------------------------
-    # PARTIAL
-    # -----------------------------------------------------
-
-    elif len(available_fields) >= 1:
-
-        extraction_status = "PARTIAL"
-
-        needs_review = True
-
-    # -----------------------------------------------------
-    # NOTHING EXTRACTED
-    # -----------------------------------------------------
-
-    else:
-
-        extraction_status = (
-            "NO_DETAILS_EXTRACTED"
-        )
-
-        needs_review = True
-
-    return (
-        extraction_status,
-        needs_review,
-        available_fields,
-        missing_fields
-    )
+	return (extraction_status, needs_review, available_fields, missing_fields)
 
 
 # =========================================================
 # PROCESS ONE PAGE
 # =========================================================
 
+
 def process_page(page_number, text):
+	sections = find_notice_sections(text)
 
-    sections = find_notice_sections(
-        text
-    )
+	sections = remove_duplicate_sections(sections)
 
-    sections = remove_duplicate_sections(
-        sections
-    )
+	detected_sections = []
 
-    detected_sections = []
+	for section in sections:
+		blocks = split_notice_into_blocks(section["text"])
 
-    for section in sections:
+		for block_number, block in enumerate(blocks, start=1):
+			# -------------------------------------------------
+			# DETECT NOTICE
+			# -------------------------------------------------
 
-        blocks = split_notice_into_blocks(
-            section["text"]
-        )
+			detection = detect_notice(block)
 
-        for block_number, block in enumerate(
-            blocks,
-            start=1
-        ):
+			# -------------------------------------------------
+			# Ignore non-relevant content
+			# -------------------------------------------------
 
-            # -------------------------------------------------
-            # DETECT NOTICE
-            # -------------------------------------------------
+			if not detection["is_notice"]:
+				continue
 
-            detection = detect_notice(
-                block
-            )
+			# -------------------------------------------------
+			# EXTRACT DETAILS
+			# -------------------------------------------------
 
-            # -------------------------------------------------
-            # Ignore non-relevant content
-            # -------------------------------------------------
+			extraction = extract_notice_details(block)
 
-            if not detection["is_notice"]:
+			# -------------------------------------------------
+			# CHECK EXTRACTION QUALITY
+			# -------------------------------------------------
 
-                continue
+			(extraction_status, needs_review, available_fields, missing_fields) = evaluate_extraction(
+				extraction
+			)
 
-            # -------------------------------------------------
-            # EXTRACT DETAILS
-            # -------------------------------------------------
+			# -------------------------------------------------
+			# SAVE DETECTED NOTICE
+			# -------------------------------------------------
 
-            extraction = extract_notice_details(
-                block
-            )
+			detected_sections.append(
+				{
+					"section_start_line": section["start_line"],
+					"section_end_line": section["end_line"],
+					"block_number": block_number,
+					"detection": detection,
+					"extraction": extraction,
+					"extraction_status": extraction_status,
+					"needs_review": needs_review,
+					"available_fields": available_fields,
+					"missing_fields": missing_fields,
+					"text": block,
+				}
+			)
 
-            # -------------------------------------------------
-            # CHECK EXTRACTION QUALITY
-            # -------------------------------------------------
-
-            (
-                extraction_status,
-                needs_review,
-                available_fields,
-                missing_fields
-            ) = evaluate_extraction(
-                extraction
-            )
-
-            # -------------------------------------------------
-            # SAVE DETECTED NOTICE
-            # -------------------------------------------------
-
-            detected_sections.append({
-
-                "section_start_line":
-                    section["start_line"],
-
-                "section_end_line":
-                    section["end_line"],
-
-                "block_number":
-                    block_number,
-
-                "detection":
-                    detection,
-
-                "extraction":
-                    extraction,
-
-                "extraction_status":
-                    extraction_status,
-
-                "needs_review":
-                    needs_review,
-
-                "available_fields":
-                    available_fields,
-
-                "missing_fields":
-                    missing_fields,
-
-                "text":
-                    block
-
-            })
-
-    return {
-
-        "page_number":
-            page_number,
-
-        "is_notice":
-            len(detected_sections) > 0,
-
-        "notice_count":
-            len(detected_sections),
-
-        "notice_sections":
-            detected_sections
-
-    }
+	return {
+		"page_number": page_number,
+		"is_notice": len(detected_sections) > 0,
+		"notice_count": len(detected_sections),
+		"notice_sections": detected_sections,
+	}
 
 
 # =========================================================
 # PROCESS ENTIRE NEWSPAPER
 # =========================================================
 
+
 def process_newspaper():
+	print()
 
-    print()
+	print("=" * 60)
 
-    print("=" * 60)
+	print("ESTATE NOTICE NEWSPAPER PROCESSOR")
 
-    print(
-        "ESTATE NOTICE NEWSPAPER PROCESSOR"
-    )
+	print("=" * 60)
 
-    print("=" * 60)
+	# -----------------------------------------------------
+	# Read newspaper
+	# -----------------------------------------------------
 
-    # -----------------------------------------------------
-    # Read newspaper
-    # -----------------------------------------------------
+	newspaper_text = read_newspaper()
 
-    newspaper_text = read_newspaper()
+	if newspaper_text is None:
+		return
 
-    if newspaper_text is None:
+	print()
 
-        return
+	print("Newspaper text loaded successfully.")
 
-    print()
+	# -----------------------------------------------------
+	# Split pages
+	# -----------------------------------------------------
 
-    print(
-        "Newspaper text loaded successfully."
-    )
+	pages = split_pages(newspaper_text)
 
-    # -----------------------------------------------------
-    # Split pages
-    # -----------------------------------------------------
+	print()
 
-    pages = split_pages(
-        newspaper_text
-    )
+	print("Total pages found:", len(pages))
 
-    print()
+	# -----------------------------------------------------
+	# Process pages
+	# -----------------------------------------------------
 
-    print(
-        "Total pages found:",
-        len(pages)
-    )
+	results = []
 
-    # -----------------------------------------------------
-    # Process pages
-    # -----------------------------------------------------
+	detected_pages = 0
 
-    results = []
+	total_detected_notices = 0
 
-    detected_pages = 0
+	for page in pages:
+		page_number = page["page_number"]
 
-    total_detected_notices = 0
+		page_text = page["text"]
 
-    for page in pages:
+		result = process_page(page_number, page_text)
 
-        page_number = page[
-            "page_number"
-        ]
+		results.append(result)
 
-        page_text = page[
-            "text"
-        ]
+		# -------------------------------------------------
+		# Print detected notices
+		# -------------------------------------------------
 
-        result = process_page(
-            page_number,
-            page_text
-        )
-
-        results.append(
-            result
-        )
-
-        # -------------------------------------------------
-        # Print detected notices
-        # -------------------------------------------------
-
-        if result["is_notice"]:
-
-            detected_pages += 1
-
-            total_detected_notices += (
-                result["notice_count"]
-            )
-
-            print()
-
-            print("=" * 60)
-
-            print(
-                "NOTICE FOUND ON PAGE:",
-                page_number
-            )
-
-            print("=" * 60)
-
-            for notice in result[
-                "notice_sections"
-            ]:
-
-                print()
-
-                print(
-                    "Section lines:",
-                    notice[
-                        "section_start_line"
-                    ],
-                    "-",
-                    notice[
-                        "section_end_line"
-                    ]
-                )
-
-                print(
-                    "Notice block:",
-                    notice[
-                        "block_number"
-                    ]
-                )
-
-                print(
-                    "Notice type:",
-                    notice[
-                        "detection"
-                    ][
-                        "notice_type"
-                    ]
-                )
-
-                print(
-                    "Confidence:",
-                    notice[
-                        "detection"
-                    ][
-                        "confidence"
-                    ]
-                )
-
-                print(
-                    "Score:",
-                    notice[
-                        "detection"
-                    ][
-                        "score"
-                    ]
-                )
-
-                print(
-                    "Reasons:",
-                    notice[
-                        "detection"
-                    ][
-                        "reasons"
-                    ]
-                )
-
-                print(
-                    "Extraction status:",
-                    notice[
-                        "extraction_status"
-                    ]
-                )
-
-                print(
-                    "Needs review:",
-                    notice[
-                        "needs_review"
-                    ]
-                )
-
-                print(
-                    "Available fields:",
-                    notice[
-                        "available_fields"
-                    ]
-                )
-
-                print(
-                    "Missing fields:",
-                    notice[
-                        "missing_fields"
-                    ]
-                )
-
-                print(
-                    "Extracted:",
-                    notice[
-                        "extraction"
-                    ]
-                )
-
-                print()
-
-                print(
-                    "Notice text:"
-                )
-
-                print(
-                    notice["text"]
-                )
-
-                print(
-                    "-" * 60
-                )
-
-    # =====================================================
-    # CREATE FINAL JSON
-    # =====================================================
-
-    output = {
-
-        "newspaper_file":
-            INPUT_FILE,
-
-        "total_pages":
-            len(pages),
-
-        "detected_notice_pages":
-            detected_pages,
-
-        "total_detected_notices":
-            total_detected_notices,
-
-        "results":
-            results
-
-    }
-
-    # -----------------------------------------------------
-    # Save JSON
-    # -----------------------------------------------------
-
-    with open(  # nosemgrep: fixed output path defined in this script
-        OUTPUT_FILE,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            output,
-            file,
-            indent=4,
-            ensure_ascii=False
-        )
-
-    # -----------------------------------------------------
-    # Final summary
-    # -----------------------------------------------------
-
-    print()
-
-    print("=" * 60)
-
-    print(
-        "PROCESSING COMPLETE"
-    )
-
-    print("=" * 60)
-
-    print(
-        "Total pages:",
-        len(pages)
-    )
-
-    print(
-        "Notice pages detected:",
-        detected_pages
-    )
-
-    print(
-        "Individual notices detected:",
-        total_detected_notices
-    )
-
-    print()
-
-    print(
-        "Results saved to:",
-        OUTPUT_FILE
-    )
+		if result["is_notice"]:
+			detected_pages += 1
+
+			total_detected_notices += result["notice_count"]
+
+			print()
+
+			print("=" * 60)
+
+			print("NOTICE FOUND ON PAGE:", page_number)
+
+			print("=" * 60)
+
+			for notice in result["notice_sections"]:
+				print()
+
+				print("Section lines:", notice["section_start_line"], "-", notice["section_end_line"])
+
+				print("Notice block:", notice["block_number"])
+
+				print("Notice type:", notice["detection"]["notice_type"])
+
+				print("Confidence:", notice["detection"]["confidence"])
+
+				print("Score:", notice["detection"]["score"])
+
+				print("Reasons:", notice["detection"]["reasons"])
+
+				print("Extraction status:", notice["extraction_status"])
+
+				print("Needs review:", notice["needs_review"])
+
+				print("Available fields:", notice["available_fields"])
+
+				print("Missing fields:", notice["missing_fields"])
+
+				print("Extracted:", notice["extraction"])
+
+				print()
+
+				print("Notice text:")
+
+				print(notice["text"])
+
+				print("-" * 60)
+
+	# =====================================================
+	# CREATE FINAL JSON
+	# =====================================================
+
+	output = {
+		"newspaper_file": INPUT_FILE,
+		"total_pages": len(pages),
+		"detected_notice_pages": detected_pages,
+		"total_detected_notices": total_detected_notices,
+		"results": results,
+	}
+
+	# -----------------------------------------------------
+	# Save JSON
+	# -----------------------------------------------------
+
+	# Audited file access: fixed output path defined in this script.
+
+	with open(  # nosemgrep
+		OUTPUT_FILE, "w", encoding="utf-8"
+	) as file:
+		json.dump(output, file, indent=4, ensure_ascii=False)
+
+	# -----------------------------------------------------
+	# Final summary
+	# -----------------------------------------------------
+
+	print()
+
+	print("=" * 60)
+
+	print("PROCESSING COMPLETE")
+
+	print("=" * 60)
+
+	print("Total pages:", len(pages))
+
+	print("Notice pages detected:", detected_pages)
+
+	print("Individual notices detected:", total_detected_notices)
+
+	print()
+
+	print("Results saved to:", OUTPUT_FILE)
 
 
 # =========================================================
@@ -790,5 +499,4 @@ def process_newspaper():
 # =========================================================
 
 if __name__ == "__main__":
-
-    process_newspaper()
+	process_newspaper()
