@@ -7,7 +7,12 @@ import pytesseract
 from PIL import Image
 
 
-def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
+def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path, output_folder=None):
+	"""OCR the listed pages and merge them with the direct text.
+
+	Writes to `output_folder` when given, otherwise to <pdf folder>/ocr_extraction/.
+	Returns the paths of the combined JSON and the pages that failed OCR.
+	"""
 	pdf_path = Path(pdf_path).expanduser().resolve()
 	direct_json_path = Path(direct_json_path).expanduser().resolve()
 	ocr_list_path = Path(ocr_list_path).expanduser().resolve()
@@ -39,7 +44,10 @@ def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
 	else:
 		print("No pages need OCR.")
 
-	output_folder = pdf_path.parent / "ocr_extraction"
+	if output_folder:
+		output_folder = Path(output_folder).expanduser().resolve()
+	else:
+		output_folder = pdf_path.parent / "ocr_extraction"
 	output_folder.mkdir(parents=True, exist_ok=True)
 
 	page_text_folder = output_folder / "pages"
@@ -173,6 +181,13 @@ def ocr_required_pages(pdf_path, direct_json_path, ocr_list_path):
 	print(combined_file)
 	print("\nFull newspaper text:")
 	print(full_text_file)
+
+	return {
+		"output_folder": str(output_folder),
+		"combined_file": str(combined_file),
+		"ocr_page_count": len(ocr_results),
+		"failed_pages": [page for page, result in ocr_results.items() if result["status"] == "failed"],
+	}
 
 
 if __name__ == "__main__":
