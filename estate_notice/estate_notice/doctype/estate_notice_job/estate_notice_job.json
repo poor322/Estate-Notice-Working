@@ -10,6 +10,7 @@
  "field_order": [
   "newspaper",
   "job_date",
+  "uploaded_pdf",
   "status",
   "sb_details",
   "job_log",
@@ -32,6 +33,12 @@
    "in_list_view": 1,
    "label": "Job Date",
    "reqd": 1
+  },
+  {
+   "description": "Attach a PDF to process it instead of downloading the selected newspaper.",
+   "fieldname": "uploaded_pdf",
+   "fieldtype": "Attach",
+   "label": "Upload PDF"
   },
   {
    "default": "Pending",

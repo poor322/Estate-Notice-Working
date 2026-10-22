@@ -15,7 +15,7 @@
   "rate_limit_count": 5,
   "rate_limit_seconds": 86400,
   "reference_doctype": "Estate Notice Job",
-  "script": "\nif doc.status == \"Pending\" and not doc.job_log:\n    doc.status = \"Running\"\n    doc.job_log = \"Job queued...\"\n    \n    # We enqueue a background job to run the scripts\n    frappe.enqueue(\n        \"estate_notice.setup_frontend.run_fetcher_job\",\n        queue=\"long\",\n        timeout=3600,\n        job_name=doc.name,\n        doc_name=doc.name\n    )\n",
+  "script": "\nif doc.status == \"Pending\" and not doc.job_log:\n    doc.status = \"Running\"\n    doc.job_log = \"Job queued...\"\n    frappe.enqueue(\n        \"estate_notice.setup_frontend.run_fetcher_job\",\n        queue=\"long\",\n        timeout=3600,\n        job_name=doc.name,\n        doc_name=doc.name,\n        enqueue_after_commit=True\n    )\n",
   "script_type": "DocType Event"
  }
 ]
