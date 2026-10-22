@@ -198,13 +198,44 @@ def match_property(property_record, notice):
             notice_address,
         )
 
-        if address_similarity >= 0.80:
+        generic_address_words = {
+            "new",
+            "delhi",
+            "india",
+        }
+
+        registered_tokens = {
+            token
+            for token in registered_address.split()
+            if token not in generic_address_words
+            and len(token) >= 2
+        }
+
+        notice_tokens = {
+            token
+            for token in notice_address.split()
+            if token not in generic_address_words
+            and len(token) >= 2
+        }
+
+        significant_overlap = (
+            registered_tokens
+            & notice_tokens
+        )
+
+        if (
+            address_similarity >= 0.80
+            and significant_overlap
+        ):
             score += 30
             reasons.append(
                 "Strong property address match"
             )
 
-        elif address_similarity >= 0.60:
+        elif (
+            address_similarity >= 0.60
+            and significant_overlap
+        ):
             score += 15
             reasons.append(
                 "Partial property address match"
@@ -300,7 +331,7 @@ def match_property(property_record, notice):
         confidence = "MEDIUM"
 
     else:
-        confidence = "NO_MATCH"
+        confidence = "LOW"
 
     return {
         "property_id":
