@@ -6,6 +6,8 @@ from pathlib import Path
 
 import fitz  # PyMuPDF
 
+from estate_notice.fetchers.sources import check_fetch_supported
+
 from playwright.sync_api import (
     sync_playwright,
     Error as PlaywrightError,
@@ -418,9 +420,23 @@ def get_pdf_page_count(pdf_path):
 # MAIN
 # ============================================================
 
-def run():
+def run(
+    newspaper="Hindustan Times Delhi",
+    edition_date=None,
+    today=None
+):
 
-    today = datetime.now().strftime(
+    # Callers inside Frappe pass the site's date as `today`,
+    # because the server clock may be on a different day.
+    today_date = today or datetime.now().date()
+
+    check_fetch_supported(
+        newspaper,
+        edition_date or today_date,
+        today_date
+    )
+
+    today = today_date.strftime(
         "%Y-%m-%d"
     )
 
