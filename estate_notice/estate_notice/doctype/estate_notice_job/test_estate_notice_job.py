@@ -10,6 +10,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime, today
 from rq.exceptions import NoSuchJobError
 
+from estate_notice.estate_notice.doctype.estate_notice_job.estate_notice_job import rerun
 from estate_notice.fetchers.sources import check_fetch_supported
 from estate_notice.job_status import check_stuck_jobs, mark_job_failed, on_job_failure
 
@@ -75,6 +76,18 @@ class TestEstateNoticeJob(IntegrationTestCase):
 		with patch("frappe.enqueue") as enqueue:
 			job.save()
 		enqueue.assert_not_called()
+
+	def test_rerun_queues_a_finished_job_again(self):
+		job, _ = self.make_job()
+		self.set_state(job.name, "Failed")
+		with patch("frappe.enqueue") as enqueue:
+			rerun(job.name)
+		job.reload()
+		self.assertEqual(job.status, "Queued")
+		self.assertEqual(enqueue.call_args.kwargs["doc_name"], job.name)
+
+		with self.assertRaises(frappe.ValidationError):
+			rerun(job.name)
 
 	def test_mark_job_failed_only_touches_active_jobs(self):
 		running, _ = self.make_job()
