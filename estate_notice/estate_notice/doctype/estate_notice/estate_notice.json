@@ -1,0 +1,346 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-10-22 13:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "job",
+  "newspaper",
+  "edition_date",
+  "page_number",
+  "column_break_links",
+  "record_level",
+  "notice_number",
+  "review_status",
+  "content_hash",
+  "section_detection",
+  "confidence",
+  "score",
+  "category",
+  "column_break_detection",
+  "matched_signals",
+  "section_content",
+  "notice_image",
+  "column_break_content",
+  "ocr_text",
+  "section_extracted",
+  "classification",
+  "notice_type",
+  "transaction_type",
+  "property_number",
+  "property_address",
+  "village",
+  "tehsil",
+  "city",
+  "pincodes",
+  "column_break_extracted",
+  "owner_names",
+  "seller_names",
+  "mustatil_numbers",
+  "killa_numbers",
+  "document_numbers",
+  "land_area",
+  "objection_period_days",
+  "phone_numbers",
+  "email_addresses",
+  "section_matches",
+  "matched_properties",
+  "section_raw",
+  "raw_json"
+ ],
+ "fields": [
+  {
+   "default": "EN-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series",
+   "no_copy": 1,
+   "options": "EN-.YYYY.-",
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "job",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Job",
+   "options": "Estate Notice Job",
+   "read_only": 1,
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "job.newspaper",
+   "fieldname": "newspaper",
+   "fieldtype": "Data",
+   "label": "Newspaper",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "job.job_date",
+   "fieldname": "edition_date",
+   "fieldtype": "Date",
+   "label": "Edition Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "page_number",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Page",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_links",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Page: the page couldn't be split into individual notices, so this record holds the whole page's text.",
+   "fieldname": "record_level",
+   "fieldtype": "Select",
+   "label": "Record Type",
+   "options": "Notice\nPage",
+   "read_only": 1
+  },
+  {
+   "fieldname": "notice_number",
+   "fieldtype": "Int",
+   "label": "Notice No. on Page",
+   "read_only": 1
+  },
+  {
+   "default": "Needs Review",
+   "fieldname": "review_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Review Status",
+   "options": "Needs Review\nConfirmed\nRejected\nDuplicate"
+  },
+  {
+   "fieldname": "content_hash",
+   "fieldtype": "Data",
+   "label": "Content Hash",
+   "no_copy": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_detection",
+   "fieldtype": "Section Break",
+   "label": "Detection"
+  },
+  {
+   "description": "Cropped notice: High if the detector rates its text HIGH, otherwise Medium. Page record: the detector's rating of the page.",
+   "fieldname": "confidence",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Confidence",
+   "options": "High\nMedium",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "score",
+   "fieldtype": "Int",
+   "label": "Detector Score",
+   "read_only": 1
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Category"
+  },
+  {
+   "fieldname": "column_break_detection",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "matched_signals",
+   "fieldtype": "Small Text",
+   "label": "Reasons / Keywords Matched",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_content",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "notice_image",
+   "fieldtype": "Attach Image",
+   "label": "Notice Image",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_content",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ocr_text",
+   "fieldtype": "Long Text",
+   "label": "OCR Text",
+   "read_only": 1
+  },
+  {
+   "description": "Filled by the structured extractor from the OCR text. Correct them here when reviewing.",
+   "fieldname": "section_extracted",
+   "fieldtype": "Section Break",
+   "label": "Extracted Fields"
+  },
+  {
+   "fieldname": "classification",
+   "fieldtype": "Data",
+   "label": "Property Relevance"
+  },
+  {
+   "fieldname": "notice_type",
+   "fieldtype": "Data",
+   "label": "Notice Type"
+  },
+  {
+   "fieldname": "transaction_type",
+   "fieldtype": "Data",
+   "label": "Transaction Type"
+  },
+  {
+   "fieldname": "property_number",
+   "fieldtype": "Data",
+   "label": "Property Number"
+  },
+  {
+   "fieldname": "property_address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "village",
+   "fieldtype": "Data",
+   "label": "Village"
+  },
+  {
+   "fieldname": "tehsil",
+   "fieldtype": "Data",
+   "label": "Tehsil"
+  },
+  {
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "pincodes",
+   "fieldtype": "Data",
+   "label": "Pincode"
+  },
+  {
+   "fieldname": "column_break_extracted",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "owner_names",
+   "fieldtype": "Small Text",
+   "label": "Owners"
+  },
+  {
+   "fieldname": "seller_names",
+   "fieldtype": "Small Text",
+   "label": "Sellers"
+  },
+  {
+   "fieldname": "mustatil_numbers",
+   "fieldtype": "Data",
+   "label": "Mustatil"
+  },
+  {
+   "fieldname": "killa_numbers",
+   "fieldtype": "Data",
+   "label": "Killa"
+  },
+  {
+   "fieldname": "document_numbers",
+   "fieldtype": "Small Text",
+   "label": "Document Numbers"
+  },
+  {
+   "fieldname": "land_area",
+   "fieldtype": "Data",
+   "label": "Area"
+  },
+  {
+   "fieldname": "objection_period_days",
+   "fieldtype": "Int",
+   "label": "Objection Days"
+  },
+  {
+   "fieldname": "phone_numbers",
+   "fieldtype": "Small Text",
+   "label": "Phones"
+  },
+  {
+   "fieldname": "email_addresses",
+   "fieldtype": "Small Text",
+   "label": "Emails"
+  },
+  {
+   "fieldname": "section_matches",
+   "fieldtype": "Section Break",
+   "label": "Matched Properties"
+  },
+  {
+   "description": "Filled by property matching (not wired in yet).",
+   "fieldname": "matched_properties",
+   "fieldtype": "Table",
+   "label": "Matched Properties",
+   "options": "Estate Notice Property Match"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_raw",
+   "fieldtype": "Section Break",
+   "label": "Raw Data"
+  },
+  {
+   "fieldname": "raw_json",
+   "fieldtype": "Code",
+   "label": "Raw JSON",
+   "options": "JSON",
+   "read_only": 1
+  }
+ ],
+ "image_field": "notice_image",
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-22 13:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Estate Notice",
+ "name": "Estate Notice",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "show_title_field_in_link": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "category"
+}

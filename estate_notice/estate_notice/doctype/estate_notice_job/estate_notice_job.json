@@ -12,11 +12,25 @@
   "job_date",
   "uploaded_pdf",
   "status",
+  "section_summary",
+  "total_pages",
+  "ocr_pages",
+  "column_break_summary",
+  "total_notices",
+  "high_count",
+  "medium_count",
+  "section_high",
+  "high_notices_html",
+  "section_medium",
+  "medium_notices_html",
   "sb_details",
   "job_log",
   "downloaded_pdf",
   "output_folder",
-  "rq_job_id"
+  "rq_job_id",
+  "section_raw_results",
+  "results_json",
+  "raw_results_html"
  ],
  "fields": [
   {
@@ -54,9 +68,73 @@
    "read_only": 1
   },
   {
+   "fieldname": "section_summary",
+   "fieldtype": "Section Break",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "total_pages",
+   "fieldtype": "Int",
+   "label": "Pages",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "ocr_pages",
+   "fieldtype": "Int",
+   "label": "OCR Pages",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_summary",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_notices",
+   "fieldtype": "Int",
+   "label": "Total Notices",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "high_count",
+   "fieldtype": "Int",
+   "label": "High Confidence",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "medium_count",
+   "fieldtype": "Int",
+   "label": "Medium Confidence",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_high",
+   "fieldtype": "Section Break",
+   "label": "High confidence notices"
+  },
+  {
+   "fieldname": "high_notices_html",
+   "fieldtype": "HTML",
+   "label": "High confidence notices"
+  },
+  {
+   "fieldname": "section_medium",
+   "fieldtype": "Section Break",
+   "label": "Medium confidence notices"
+  },
+  {
+   "fieldname": "medium_notices_html",
+   "fieldtype": "HTML",
+   "label": "Medium confidence notices"
+  },
+  {
    "fieldname": "sb_details",
    "fieldtype": "Section Break",
-   "label": "Details"
+   "label": "Job Log"
   },
   {
    "fieldname": "job_log",
@@ -86,12 +164,36 @@
    "label": "RQ Job ID",
    "no_copy": 1,
    "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_raw_results",
+   "fieldtype": "Section Break",
+   "label": "Raw results (JSON)"
+  },
+  {
+   "fieldname": "results_json",
+   "fieldtype": "Attach",
+   "label": "Results JSON",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "raw_results_html",
+   "fieldtype": "HTML",
+   "label": "Raw results"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
- "links": [],
- "modified": "2026-10-22 12:00:00.000000",
+ "links": [
+  {
+   "group": "Results",
+   "link_doctype": "Estate Notice",
+   "link_fieldname": "job"
+  }
+ ],
+ "modified": "2026-10-22 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "Estate Notice",
  "name": "Estate Notice Job",

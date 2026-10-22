@@ -20,12 +20,13 @@ class JobLog:
 
 
 def run_fetcher_job(doc_name=None):
-	"""Background job: get the PDF, extract text, OCR, then detect notice pages."""
+	"""Background job: get the PDF, extract text, OCR, detect notices, then create Estate Notices."""
 	log = JobLog(doc_name)
 	try:
 		from estate_notice.detectors.notice_detector import detect_from_json
 		from estate_notice.extractors.ocr_extractor import ocr_required_pages as run_ocr
 		from estate_notice.extractors.pdf_text_extractor import extract_pdf_text
+		from estate_notice.notice_results import build_notice_records
 
 		job = frappe.get_doc(JOB_DOCTYPE, doc_name)
 		output_folder = get_job_output_folder(job.name)
@@ -56,7 +57,9 @@ def run_fetcher_job(doc_name=None):
 		log.add(
 			f"Total Pages: {extraction.get('total_pages')}\n"
 			f"Text-layer candidates: {extraction.get('notice_candidate_pages')}\n"
-			f"OCR Required Pages: {ocr_page_count}"
+			f"OCR Required Pages: {ocr_page_count}",
+			total_pages=extraction.get("total_pages"),
+			ocr_pages=ocr_page_count,
 		)
 
 		if ocr_page_count:
@@ -84,9 +87,23 @@ def run_fetcher_job(doc_name=None):
 		page_list = ", ".join(str(page["page_number"]) for page in notice_pages) or "none"
 		log.add(
 			f"Notice pages (detector on {'OCR' if ocr_page_count else 'text-layer'} text): "
-			f"{len(notice_pages)} (HIGH {high}, MEDIUM {len(notice_pages) - high}; pages: {page_list})\n"
+			f"{len(notice_pages)} (HIGH {high}, MEDIUM {len(notice_pages) - high}; pages: {page_list})"
+		)
+
+		log.add("Cropping public notices and extracting fields...")
+		results = build_notice_records(job.name, str(pdf_path), text_json, detection, output_folder)
+		summary = results["summary"]
+		log.add(
+			f"Estate Notices created: {summary['total_notices']} "
+			f"(High {summary['high_count']}, Medium {summary['medium_count']}): "
+			f"{summary['cropped_notices']} cropped notices, "
+			f"{summary['page_records']} whole-page records for flagged pages with no cropped notice\n"
 			f"Outputs saved to: {output_folder}",
 			status="Completed",
+			total_notices=summary["total_notices"],
+			high_count=summary["high_count"],
+			medium_count=summary["medium_count"],
+			results_json=results["file_url"],
 		)
 	except Exception as error:
 		# The connection may be gone (bench migrate kills idle ones during OCR),
