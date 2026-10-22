@@ -155,6 +155,14 @@ app_license = "mit"
 # Scheduled Tasks
 # ---------------
 
+scheduler_events = {
+	"cron": {
+		"*/5 * * * *": [
+			"estate_notice.job_status.check_stuck_jobs",
+		],
+	},
+}
+
 # scheduler_events = {
 # 	"all": [
 # 		"estate_notice.tasks.all"
@@ -266,6 +274,6 @@ app_license = "mit"
 # Fixtures
 # --------
 
-fixtures = [
-	{"dt": "Server Script", "filters": [["name", "=", "Run Estate Notice Fetcher"]]},
-]
+# The Estate Notice Job controller now queues runs itself; the old
+# "Run Estate Notice Fetcher" Server Script is removed by a patch.
+fixtures = []

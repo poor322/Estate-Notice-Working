@@ -4,3 +4,4 @@
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
+estate_notice.patches.v1_0.remove_fetcher_server_script

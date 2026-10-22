@@ -2,110 +2,125 @@ import shutil
 from pathlib import Path
 
 import frappe
+from frappe.utils import getdate, today
 
-def create_server_script():
-    script_name = "Run Estate Notice Fetcher"
-    
-    if frappe.db.exists("Server Script", script_name):
-        print("Server Script already exists.")
-        return
+from estate_notice.job_status import JOB_DOCTYPE, mark_job_failed, reconnect_db, set_job_values
 
-    script_code = """
-if doc.status == "Pending" and not doc.job_log:
-    doc.status = "Running"
-    doc.job_log = "Job queued..."
-    frappe.enqueue(
-        "estate_notice.setup_frontend.run_fetcher_job",
-        queue="long",
-        timeout=3600,
-        job_name=doc.name,
-        doc_name=doc.name,
-        enqueue_after_commit=True
-    )
-"""
 
-    doc = frappe.get_doc({
-        "doctype": "Server Script",
-        "name": script_name,
-        "script_type": "DocType Event",
-        "reference_doctype": "Estate Notice Job",
-        "doctype_event": "Before Save",
-        "script": script_code,
-        "disabled": 0
-    })
-    doc.insert(ignore_permissions=True)
-    frappe.db.commit()
-    print("Created Server Script.")
+class JobLog:
+    """Accumulates the job log and saves it after every step."""
 
-@frappe.whitelist()
+    def __init__(self, doc_name):
+        self.doc_name = doc_name
+        self.lines = []
+
+    def add(self, text, **values):
+        self.lines.append(text)
+        set_job_values(self.doc_name, job_log="\n".join(self.lines) + "\n", **values)
+
+
 def run_fetcher_job(doc_name=None):
+    """Background job: get the PDF, extract text, OCR, then detect notice pages."""
+    log = JobLog(doc_name)
     try:
+        from estate_notice.detectors.notice_detector import detect_from_json
+        from estate_notice.extractors.ocr_extractor import ocr_required_pages as run_ocr
         from estate_notice.extractors.pdf_text_extractor import extract_pdf_text
 
-        job = frappe.get_doc("Estate Notice Job", doc_name)
+        job = frappe.get_doc(JOB_DOCTYPE, doc_name)
+        output_folder = get_job_output_folder(job.name)
+        log.add("Job started.", status="Running", output_folder=str(output_folder))
 
         if job.uploaded_pdf:
             pdf_path = stage_uploaded_pdf(job)
-            source_message = f"Using uploaded PDF: {pdf_path}\n"
+            log.add(f"Using uploaded PDF: {pdf_path}")
         else:
             from estate_notice.fetchers.indupaper_fetcher import run as fetcher_run
 
-            source_message = "Running newspaper fetcher...\n"
-            frappe.db.set_value("Estate Notice Job", doc_name, "job_log", source_message)
-            frappe.db.commit()
-            pdf_path = fetcher_run()
+            log.add(f"Downloading {job.newspaper} for {job.job_date}...")
+            pdf_path = fetcher_run(
+                newspaper=job.newspaper,
+                edition_date=getdate(job.job_date),
+                today=getdate(today()),
+            )
+            log.add(f"Downloaded PDF: {pdf_path}", downloaded_pdf=attach_downloaded_pdf(job.name, pdf_path))
 
-        frappe.db.set_value(
-            "Estate Notice Job",
-            doc_name,
-            "job_log",
-            source_message + "Running extractor...\n",
+        log.add("Running extractor...")
+        extraction = extract_pdf_text(str(pdf_path), output_folder=output_folder / "direct_extraction")
+        if extraction.get("status") != "success":
+            raise RuntimeError(f"Text extraction failed: {extraction.get('reason')}")
+
+        direct_folder = Path(extraction["output_folder"])
+        text_json = direct_folder / "direct_text.json"
+        ocr_page_count = extraction.get("ocr_required_pages", 0)
+        log.add(
+            f"Total Pages: {extraction.get('total_pages')}\n"
+            f"Text-layer candidates: {extraction.get('notice_candidate_pages')}\n"
+            f"OCR Required Pages: {ocr_page_count}"
         )
-        frappe.db.commit()
 
-        extraction_results = extract_pdf_text(str(pdf_path))
+        if ocr_page_count:
+            log.add("Running OCR (this may take a while)...")
+            ocr = run_ocr(
+                str(pdf_path),
+                str(text_json),
+                str(direct_folder / "ocr_required_pages.json"),
+                output_folder=output_folder / "ocr_extraction",
+            )
+            failed_pages = ocr["failed_pages"]
+            if failed_pages and len(failed_pages) == ocr["ocr_page_count"]:
+                raise RuntimeError(f"OCR failed on all {len(failed_pages)} pages.")
+            text_json = Path(ocr["combined_file"])
+            failed_note = f" Pages that failed OCR: {', '.join(map(str, failed_pages))}" if failed_pages else ""
+            log.add("OCR finished." + failed_note)
 
-        output_folder = extraction_results.get("output_folder")
-        final_log = f"Extraction Finished.\nStatus: {extraction_results.get('status')}\n"
-        if extraction_results.get("status") == "success":
-            final_log += f"Total Pages: {extraction_results.get('total_pages')}\n"
-            final_log += f"Notice Candidates Found: {extraction_results.get('notice_candidate_pages')}\n"
-            final_log += f"OCR Required Pages: {extraction_results.get('ocr_required_pages')}\n"
-            final_log += f"Outputs saved to: {output_folder}\n"
+        detection = detect_from_json(str(text_json), str(output_folder / "notice_detection.json"))
+        notice_pages = detection["notice_pages"]
+        high = sum(1 for page in notice_pages if page["confidence"] == "HIGH")
+        page_list = ", ".join(str(page["page_number"]) for page in notice_pages) or "none"
+        log.add(
+            f"Notice pages (detector on {'OCR' if ocr_page_count else 'text-layer'} text): "
+            f"{len(notice_pages)} (HIGH {high}, MEDIUM {len(notice_pages) - high}; pages: {page_list})\n"
+            f"Outputs saved to: {output_folder}",
+            status="Completed",
+        )
+    except Exception as error:
+        # The connection may be gone (bench migrate kills idle ones during OCR),
+        # so open a fresh one before recording the failure.
+        reconnect_db()
+        mark_job_failed(doc_name, f"{type(error).__name__}: {error}")
+        raise
 
-            if extraction_results.get("ocr_required_pages", 0) > 0:
-                frappe.db.set_value(
-                    "Estate Notice Job",
-                    doc_name,
-                    "job_log",
-                    final_log + "\nRunning OCR (this may take a while)...\n",
-                )
-                frappe.db.commit()
 
-                try:
-                    from estate_notice.extractors.ocr_extractor import (
-                        ocr_required_pages as run_ocr,
-                    )
+def get_job_output_folder(job_name):
+    """Return private/files/estate_notice/jobs/<job name>/, creating it."""
+    jobs_root = Path(frappe.get_site_path("private", "files", "estate_notice", "jobs")).resolve()
+    folder = (jobs_root / job_name).resolve()
+    if folder.parent != jobs_root:
+        raise ValueError(f"Invalid job name for an output folder: {job_name}")
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
 
-                    direct_json_path = f"{output_folder}/direct_text.json"
-                    ocr_list_path = f"{output_folder}/ocr_required_pages.json"
 
-                    run_ocr(str(pdf_path), direct_json_path, ocr_list_path)
+def attach_downloaded_pdf(job_name, pdf_path):
+    """Save the downloaded PDF as a private File on the job and return its URL.
 
-                    final_log += "\nOCR Extraction Finished Successfully!"
-                except Exception as e:
-                    final_log += f"\nOCR failed: {str(e)}"
-        else:
-            final_log += f"Reason: {extraction_results.get('reason')}"
-
-        frappe.db.set_value("Estate Notice Job", doc_name, "job_log", final_log)
-        final_status = "Completed" if extraction_results.get("status") == "success" else "Failed"
-        frappe.db.set_value("Estate Notice Job", doc_name, "status", final_status)
-        frappe.db.commit()
-    except Exception as e:
-        frappe.db.set_value("Estate Notice Job", doc_name, "status", "Failed")
-        frappe.db.set_value("Estate Notice Job", doc_name, "job_log", f"Failed: {str(e)}")
-        frappe.db.commit()
+    Frappe only serves files kept directly in private/files, so this stores a
+    copy there (Frappe reuses an existing copy with the same content).
+    """
+    pdf_path = Path(pdf_path)
+    file_doc = frappe.get_doc(
+        {
+            "doctype": "File",
+            "file_name": f"{pdf_path.stem}_{pdf_path.parent.name}.pdf",
+            "content": pdf_path.read_bytes(),
+            "is_private": 1,
+            "attached_to_doctype": JOB_DOCTYPE,
+            "attached_to_name": job_name,
+            "attached_to_field": "downloaded_pdf",
+        }
+    ).insert(ignore_permissions=True)
+    return file_doc.file_url
 
 
 def stage_uploaded_pdf(job):
@@ -152,7 +167,3 @@ def stage_uploaded_pdf(job):
 
     shutil.copy2(source_path, target_path)
     return target_path
-
-def main():
-    create_server_script()
-
