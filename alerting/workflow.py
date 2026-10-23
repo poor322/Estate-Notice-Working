@@ -5,6 +5,7 @@ import json
 import tempfile
 from pathlib import Path
 
+from alerting.matcher_adapter import validate_matcher_results
 from alerting.alert_router import route_matches
 from alerting.recipient_mapping import attach_recipients
 from alerting.dedup_check import check_deduplication
@@ -26,6 +27,7 @@ def run_workflow(matches_file, mappings_file, notices_dir,
     mappings = json.loads(Path(mappings_file).read_text(encoding="utf-8"))
     notices_dir = Path(notices_dir)
 
+    matches = validate_matcher_results(matches, notices_dir)
     routed = {"routed_matches": route_matches(matches)}
     mapped = attach_recipients(routed, mappings)
 

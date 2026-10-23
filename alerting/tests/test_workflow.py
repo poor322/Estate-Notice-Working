@@ -21,6 +21,11 @@ class TestAlertWorkflow(unittest.TestCase):
             encoding="utf-8",
         )
 
+        (self.notices / "notice2.txt").write_text(
+            "TEST PUBLIC NOTICE: Possible property match.",
+            encoding="utf-8",
+        )
+
         self.matches = self.base / "matches.json"
         self.matches.write_text(json.dumps({
             "matches": [
@@ -29,18 +34,21 @@ class TestAlertWorkflow(unittest.TestCase):
                     "notice_file": "notice1.txt",
                     "confidence": "HIGH",
                     "score": 95,
+                    "reasons": ["Exact property number match"],
                 },
                 {
                     "property_id": "TEST002",
                     "notice_file": "notice2.txt",
                     "confidence": "MEDIUM",
                     "score": 40,
+                    "reasons": ["Partial property address match"],
                 },
                 {
                     "property_id": "TEST003",
                     "notice_file": "notice3.txt",
                     "confidence": "NO_MATCH",
                     "score": 0,
+                    "reasons": [],
                 },
             ]
         }), encoding="utf-8")
