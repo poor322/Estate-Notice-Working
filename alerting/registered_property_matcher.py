@@ -33,6 +33,21 @@ def match_registered_property(notice, registered):
             else:
                 conflicts.append(field)
 
+    # Geographic evidence helps prevent false property matches.
+    geographic_fields = ("village", "tehsil", "city", "pincode")
+    geographic_matches = []
+    geographic_conflicts = []
+
+    for field in geographic_fields:
+        a = normalize_identifier(notice.get(field))
+        b = normalize_identifier(registered.get(field))
+
+        if a and b:
+            if a == b:
+                geographic_matches.append(field)
+            else:
+                geographic_conflicts.append(field)
+
     # Owner name provides supporting evidence only.
     notice_owner = str(notice.get("owner_name") or "").strip().casefold()
     registered_owner = str(
@@ -45,10 +60,12 @@ def match_registered_property(notice, registered):
         and notice_owner == registered_owner
     )
 
-    if conflicts:
+    if conflicts or geographic_conflicts:
         confidence = "MEDIUM" if matched else "NO_MATCH"
-    elif len(matched) >= 2:
+    elif len(matched) >= 2 and geographic_matches:
         confidence = "HIGH"
+    elif len(matched) >= 2:
+        confidence = "MEDIUM"
     elif len(matched) == 1 and owner_match:
         confidence = "MEDIUM"
     elif len(matched) == 1:
@@ -61,6 +78,8 @@ def match_registered_property(notice, registered):
         "confidence": confidence,
         "matched_fields": matched,
         "conflicting_fields": conflicts,
+        "geographic_matches": geographic_matches,
+        "geographic_conflicts": geographic_conflicts,
         "owner_name_matched": owner_match,
         "requires_review": confidence == "MEDIUM",
     }
