@@ -130,5 +130,38 @@ class TestReviewToMatcher(unittest.TestCase):
         self.assertEqual(approved[0]["tehsil"], "Tehsil A")
 
 
+    def test_unreviewed_identifiers_are_excluded(self):
+        source = [{
+            "id": "TEST001",
+            "content_hash": "hash001",
+            "source_image": "test.png",
+            "survey_number": "999",
+            "plot_number": "888",
+            "ocr_text": "Sample notice",
+        }]
+        reviews = [{
+            "notice_id": "TEST001",
+            "content_hash": "hash001",
+            "review_decision": "APPROVED",
+            "approved_house_number": "101",
+            "approved_by": "Test Reviewer",
+            "approved_at": "2026-10-23T10:00:00",
+            "extraction_status": "SUBJECT_CANDIDATE_REVIEW",
+        }]
+
+        result = build_approved_notices(source, reviews)
+
+        self.assertEqual(result[0]["survey_number"], "")
+        self.assertEqual(result[0]["plot_number"], "")
+
+        reviews[0]["approved_survey_number"] = "123/4"
+        reviews[0]["approved_plot_number"] = "45"
+
+        result = build_approved_notices(source, reviews)
+
+        self.assertEqual(result[0]["survey_number"], "123/4")
+        self.assertEqual(result[0]["plot_number"], "45")
+
+
 if __name__ == "__main__":
     unittest.main()

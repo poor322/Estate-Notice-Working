@@ -77,10 +77,10 @@ def build_approved_notices(source_rows, review_rows):
                 review.get("approved_tehsil") or ""
             ).strip(),
             "survey_number": (
-                source.get("survey_number") or ""
+                review.get("approved_survey_number") or ""
             ).strip(),
             "plot_number": (
-                source.get("plot_number") or ""
+                review.get("approved_plot_number") or ""
             ).strip(),
             "ocr_text": source.get("ocr_text", ""),
             "approved_by": reviewer,
