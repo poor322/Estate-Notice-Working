@@ -141,5 +141,66 @@ class TestAlertWorkflow(unittest.TestCase):
         self.assertFalse((self.base / "reviews.db").exists())
 
 
+    def test_recovery_after_review_import(self):
+        """Retry safely after a failure following review import."""
+
+        with patch(
+            "alerting.workflow.check_deduplication",
+            side_effect=RuntimeError("SIMULATED_INTERRUPTION"),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "SIMULATED_INTERRUPTION"
+            ):
+                self.run_pipeline()
+
+        with patch("alerting.workflow.preview_messages"):
+            result = self.run_pipeline()
+
+        self.assertEqual(result["new_recipient_alerts"], 1)
+
+        with sqlite3.connect(self.base / "reviews.db") as db:
+            reviews = db.execute(
+                "SELECT COUNT(*) FROM review_queue"
+            ).fetchone()[0]
+
+        with sqlite3.connect(self.base / "alerts.db") as db:
+            alerts = db.execute(
+                "SELECT COUNT(*) FROM recipient_alerts"
+            ).fetchone()[0]
+
+        self.assertEqual(reviews, 1)
+        self.assertEqual(alerts, 1)
+
+    def test_recovery_after_registration_failure(self):
+        """Retry safely when registration fails before writing."""
+
+        with patch(
+            "alerting.workflow.register_candidates",
+            side_effect=RuntimeError("SIMULATED_REGISTRATION_FAILURE"),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "SIMULATED_REGISTRATION_FAILURE"
+            ):
+                self.run_pipeline()
+
+        with patch("alerting.workflow.preview_messages"):
+            result = self.run_pipeline()
+
+        self.assertEqual(result["new_recipient_alerts"], 1)
+
+        with sqlite3.connect(self.base / "reviews.db") as db:
+            reviews = db.execute(
+                "SELECT COUNT(*) FROM review_queue"
+            ).fetchone()[0]
+
+        with sqlite3.connect(self.base / "alerts.db") as db:
+            alerts = db.execute(
+                "SELECT COUNT(*) FROM recipient_alerts"
+            ).fetchone()[0]
+
+        self.assertEqual(reviews, 1)
+        self.assertEqual(alerts, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
