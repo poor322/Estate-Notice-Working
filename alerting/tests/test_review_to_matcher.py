@@ -104,5 +104,31 @@ class TestReviewToMatcher(unittest.TestCase):
             )
 
 
+    def test_reviewed_geography_is_preserved(self):
+        source = [{
+            "id": "TEST001",
+            "content_hash": "hash001",
+            "source_image": "test.png",
+            "ocr_text": "House No. 101",
+        }]
+
+        reviews = [{
+            "notice_id": "TEST001",
+            "content_hash": "hash001",
+            "review_decision": "APPROVED",
+            "approved_house_number": "101",
+            "approved_village": "Village A",
+            "approved_tehsil": "Tehsil A",
+            "approved_by": "Test Reviewer",
+            "approved_at": "2026-10-23T10:00:00",
+            "extraction_status": "SUBJECT_CANDIDATE_REVIEW",
+        }]
+
+        approved = build_approved_notices(source, reviews)
+
+        self.assertEqual(approved[0]["village"], "Village A")
+        self.assertEqual(approved[0]["tehsil"], "Tehsil A")
+
+
 if __name__ == "__main__":
     unittest.main()

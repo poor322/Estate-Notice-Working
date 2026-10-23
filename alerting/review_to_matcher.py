@@ -70,6 +70,12 @@ def build_approved_notices(source_rows, review_rows):
             "content_hash": source["content_hash"],
             "source_file": source.get("source_image", ""),
             "house_number": approved_house,
+            "village": (
+                review.get("approved_village") or ""
+            ).strip(),
+            "tehsil": (
+                review.get("approved_tehsil") or ""
+            ).strip(),
             "survey_number": (
                 source.get("survey_number") or ""
             ).strip(),
