@@ -21,7 +21,6 @@ from estate_notice.detectors.notice_detector import detect_notice
 from estate_notice.job_status import JOB_DOCTYPE
 
 NOTICE_DOCTYPE = "Estate Notice"
-PAGE_CONFIDENCE = {"HIGH": "High", "MEDIUM": "Medium"}
 
 # structured_extractor keys copied onto the record: as they are, as labels, or joined lists.
 LABEL_FIELDS = ("classification", "notice_type", "transaction_type")
@@ -37,6 +36,7 @@ TEXT_FIELDS = (
 LIST_FIELDS = (
 	"pincodes",
 	"owner_names",
+	"legal_heirs",
 	"seller_names",
 	"mustatil_numbers",
 	"killa_numbers",
@@ -54,10 +54,6 @@ def build_notice_records(job_name, pdf_path, text_json, page_detection, output_f
 	from public_notice_pipeline import detect_public_notices
 
 	output_folder = Path(output_folder)
-	pages_text = {
-		page["page_number"]: page.get("text") or ""
-		for page in json.loads(Path(text_json).read_text(encoding="utf-8"))["pages"]
-	}
 	cropping = detect_public_notices(pdf_path, output_folder / "public_notices")
 
 	delete_job_notices(job_name)
@@ -92,20 +88,24 @@ def build_notice_records(job_name, pdf_path, text_json, page_detection, output_f
 			}
 		)
 
+	# Do not turn a page-level detector hit into an Estate Notice when
+	# cropping found no real notice. Newspaper articles and advertisements
+	# can contain generic property words such as land, sale, plot or acres.
+	# Those false positives previously appeared as "Whole page (not split)"
+	# records with no notice image.
 	pages_with_notices = {entry["page_number"] for entry in entries}
+
 	for page in page_detection["notice_pages"]:
 		if page["page_number"] in pages_with_notices:
 			continue
-		text = pages_text.get(page["page_number"], "")
-		add(
+
+		skipped.append(
 			{
 				"record_level": "Page",
 				"page_number": page["page_number"],
-				"notice_number": 0,
-				"text": text,
-				"content_hash": content_hash(text),
-				"confidence": PAGE_CONFIDENCE[page["confidence"]],
+				"confidence": page["confidence"].title(),
 				"detection": {key: value for key, value in page.items() if key != "text_preview"},
+				"skipped": "No cropped notice found; page-level fallback suppressed",
 			}
 		)
 

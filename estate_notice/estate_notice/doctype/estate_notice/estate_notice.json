@@ -37,6 +37,7 @@
   "pincodes",
   "column_break_extracted",
   "owner_names",
+  "legal_heirs",
   "seller_names",
   "mustatil_numbers",
   "killa_numbers",
@@ -247,6 +248,11 @@
    "fieldname": "owner_names",
    "fieldtype": "Small Text",
    "label": "Owners"
+  },
+  {
+   "fieldname": "legal_heirs",
+   "fieldtype": "Small Text",
+   "label": "Legal Heirs"
   },
   {
    "fieldname": "seller_names",

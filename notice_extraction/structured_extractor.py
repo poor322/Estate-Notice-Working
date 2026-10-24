@@ -42,8 +42,27 @@ def classify_property_notice(text):
 
 	matched = [keyword for keyword in strong_keywords if keyword in lower]
 
+	numbered_property = bool(
+		re.search(
+			r"\b(?:H\.?\s*No\.?|House\s+No\.?|Plot\s+No\.?|Property\s+(?:ID\s+)?No\.?)",
+			text,
+			re.IGNORECASE,
+		)
+	)
+
+	inheritance_signal = any(
+		phrase in lower
+		for phrase in [
+			"legal heir",
+			"legal heirs",
+			"inheritance",
+			"transfer of ownership",
+		]
+	)
+
 	property_related = (
-		len(matched) >= 2
+		(numbered_property and inheritance_signal)
+		or len(matched) >= 2
 		or (
 			"property" in lower
 			and any(
@@ -139,30 +158,42 @@ def extract_transaction_type(text):
 def extract_property_address(text):
 	clean = compact(text)
 
-	match = re.search(
-		r"property\s+bearing\s+"
-		r"(.+?)"
-		r"(?=\(hereinafter|belonging\s+to)",
-		clean,
-		re.IGNORECASE,
-	)
+	patterns = [
+		r"(?:in\s+)?respect(?:\s+of)?\s+"
+		+ r"((?:H\.?\s*No\.?|House\s+No\.?|Plot\s+No\.?).+?)"
+		+ r"(?=(?:,\s*)?(?:in\s+respect|after\s+death|100%\s+share|intestate\s+death)\b|[.;])",
+		r"(Plot\s+No\.?\s*\d[A-Z0-9/-]*.+?)"
+		+ r"(?=,\s*has\s+been\s+(?:lost|misplaced)|\s+has\s+been\s+(?:lost|misplaced))",
+		r"property\s+bearing\s+(.+?)(?=\(hereinafter|belonging\s+to|[.;])",
+	]
 
-	if match:
-		return match.group(1).strip(" ,.;")
+	for pattern in patterns:
+		match = re.search(pattern, clean, re.IGNORECASE)
+
+		if match:
+			return match.group(1).strip(" ,.;:-")
 
 	return None
 
 
 def extract_property_number(text):
-	match = re.search(
-		r"property\s+bearing\s+"
-		r"([A-Z0-9/-]+)",
-		text,
-		re.IGNORECASE,
-	)
+	patterns = [
+		r"\bH\.?\s*No\.?\s*[:#-]?\s*([A-Z0-9][A-Z0-9/-]*)",
+		r"\bHouse\s+No\.?\s*[:#-]?\s*([A-Z0-9][A-Z0-9/-]*)",
+		r"\bPlot\s+No\.?\s*[:#-]?\s*([A-Z0-9][A-Z0-9/-]*)",
+		r"\bProperty\s+(?:ID\s+)?No\.?\s*[:#-]?\s*([A-Z0-9][A-Z0-9/-]*)",
+		r"property\s+bearing\s+([A-Z0-9][A-Z0-9/-]*)",
+	]
 
-	if match:
-		return match.group(1)
+	for pattern in patterns:
+		for match in re.finditer(pattern, text, re.IGNORECASE):
+			value = match.group(1).strip()
+
+			# Reject OCR/header words such as "Plot No. Letter".
+			if not re.search(r"\d", value):
+				continue
+
+			return value
 
 	return None
 
@@ -170,16 +201,16 @@ def extract_property_number(text):
 def extract_village(text):
 	clean = compact(text)
 
-	match = re.search(
-		r"\bVillage\s+"
-		r"([A-Za-z ]+?)"
-		r"(?=,\s*Tehsil|,|;)",
-		clean,
-		re.IGNORECASE,
-	)
+	patterns = [
+		r"\bVillage\s+([A-Za-z ]+?)(?=,\s*Tehsil|,|;|\()",
+		r"\bVill[-.\s:]+([A-Za-z ]+?)(?=,|;|\()",
+	]
 
-	if match:
-		return match.group(1).strip()
+	for pattern in patterns:
+		match = re.search(pattern, clean, re.IGNORECASE)
+
+		if match:
+			return match.group(1).strip()
 
 	return None
 
@@ -188,9 +219,7 @@ def extract_tehsil(text):
 	clean = compact(text)
 
 	match = re.search(
-		r"\bTehsil\s+"
-		r"([A-Za-z ]+?)"
-		r"(?=,\s*(?:New Delhi|Delhi)|,|;)",
+		r"\bTehsil\s+" + r"([A-Za-z ]+?)" + r"(?=,\s*(?:New Delhi|Delhi)|,|;)",
 		clean,
 		re.IGNORECASE,
 	)
@@ -203,21 +232,91 @@ def extract_tehsil(text):
 
 def extract_owner_names(text):
 	clean = compact(text)
-
 	owners = []
 
-	match = re.search(
-		r"belonging\s+to\s+"
-		r"(.+?)"
-		r"(?=,\s*have\s+been|,\s*has\s+been)",
-		clean,
+	patterns = [
+		r"(?:Late\s+)?Sh\.?\s+"
+		+ r"([A-Za-z][A-Za-z .@'-]+?)"
+		+ r"\s+(?:S/o|D/o|W/o)\b"
+		+ r".+?\b(?:who\s+was|was)\s+the\s+owner",
+		r"issued\s+in\s+the\s+name\s+of\s+" + r"(.+?)(?=,\s+having|\s+having)",
+		r"\bmy[\s)\]}:,-]*"
+		+ r"(?:mother|father|husband|wife)\s+"
+		+ r"([A-Za-z][A-Za-z .'-]+?)"
+		+ r"\s+(?:had\s+expired|has\s+died|died)",
+	]
+
+	for pattern in patterns:
+		match = re.search(pattern, clean, re.IGNORECASE)
+
+		if match:
+			owners.append(match.group(1).strip(" ,.;"))
+
+	return unique(owners)
+
+
+def extract_legal_heirs(text):
+	clean = compact(text)
+
+	patterns = [
+		r"leaving\s+behind\s+(?:the\s+following\s+)?legal\s+heirs?\s*:?\s*"
+		+ r"(.+?)"
+		+ r"(?=and\s+there\s+(?:is|are)\s+no\s+other\s+legal\s+heirs?"
+		+ r"|If\s+any\s+person|Now,|Mother\s+Late)",
+		r"leaving\s+behind\s+(.+?)" + r"\s+as\s+(?:her|his|their)\s+sole\s+legal\s+heirs?",
+	]
+
+	segment = None
+
+	for pattern in patterns:
+		match = re.search(pattern, clean, re.IGNORECASE)
+
+		if match:
+			segment = match.group(1)
+			break
+
+	if not segment:
+		return []
+
+	segment = segment.replace("\u2019", "'").replace("\u2018", "'")
+
+	names = re.findall(
+		r"(?:^|,\s*|\(\d+\)\s*)"
+		r"(?:Sh\.?\s+|Smt\.?\s+|Mr\.?\s+|Ms\.?\s+)?"
+		r"([A-Za-z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+){0,3})"
+		r"\s*\)?\s*"
+		r"\((?:son|daughter|wife|father|mother)\b[^)]*\)",
+		segment,
 		re.IGNORECASE,
 	)
 
-	if match:
-		owners.append(match.group(1).strip())
+	return unique(names)
 
-	return unique(owners)
+
+def extract_city(text):
+	clean = compact(text)
+
+	# Prefer the location appearing in the extracted property address.
+	address = extract_property_address(text)
+
+	cities = [
+		"Faridabad",
+		"Rewari",
+		"New Delhi",
+		"Gurugram",
+		"Delhi",
+	]
+
+	if address:
+		for city in cities:
+			if re.search(rf"\b{re.escape(city)}\b", address, re.IGNORECASE):
+				return city
+
+	for city in cities:
+		if re.search(rf"\b{re.escape(city)}\b", clean, re.IGNORECASE):
+			return city
+
+	return None
 
 
 def extract_seller_names(text):
@@ -255,12 +354,23 @@ def extract_killa_numbers(text):
 
 
 def extract_document_numbers(text):
-	values = re.findall(
-		r"DOCUMENT\s+NO\.?\s*"
-		r"([A-Z0-9/-]+)",
-		text,
-		re.IGNORECASE,
-	)
+	patterns = [
+		r"\bDOCUMENT\s+NO\.?\s*[:#-]?\s*([A-Z0-9/-]+)",
+		r"\bDEED\s+NO\.?\s*[:#-]?\s*([A-Z0-9/-]+)",
+		r"\bLETTER\s+NO\.?\s*[:#-]?\s*([A-Z0-9/-]+)",
+		r"\bFIR\s+APPLICATION\s+NO\.?\s*[:#-]?\s*([A-Z0-9/-]+)",
+	]
+
+	values = []
+
+	for pattern in patterns:
+		values.extend(
+			re.findall(
+				pattern,
+				text,
+				re.IGNORECASE,
+			)
+		)
 
 	return unique(values)
 
@@ -386,17 +496,10 @@ def structure_notice(path):
 			"property_address": extract_property_address(text),
 			"village": extract_village(text),
 			"tehsil": extract_tehsil(text),
-			"city": (
-				"New Delhi"
-				if re.search(
-					r"\bNew Delhi\b",
-					text,
-					re.IGNORECASE,
-				)
-				else None
-			),
+			"city": extract_city(text),
 			"pincodes": extract_pincodes(text),
 			"owner_names": extract_owner_names(text),
+			"legal_heirs": extract_legal_heirs(text),
 			"seller_names": extract_seller_names(text),
 			"mustatil_numbers": extract_mustatil_numbers(text),
 			"killa_numbers": extract_killa_numbers(text),

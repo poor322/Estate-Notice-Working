@@ -92,27 +92,26 @@ class TestEstateNotice(IntegrationTestCase):
 			order_by="page_number, notice_number",
 		)
 
-	def test_crops_and_unsplit_pages_become_records(self):
+	def test_crops_become_records_and_unsplit_pages_are_skipped(self):
 		results = self.build()
 		notices = self.notices()
 
 		self.assertEqual(
 			[(n.page_number, n.record_level, n.confidence) for n in notices],
-			[(10, "Page", "High"), (22, "Notice", "High"), (22, "Notice", "Medium")],
+			[(22, "Notice", "High"), (22, "Notice", "Medium")],
 		)
-		self.assertEqual(results["summary"]["high_count"], 2)
+		self.assertEqual(results["summary"]["high_count"], 1)
 		self.assertEqual(results["summary"]["medium_count"], 1)
-		self.assertEqual(len(results["skipped"]), 1, "the repeated crop is skipped")
-		self.assertEqual(notices[1].category, "Public Notice")
+		self.assertEqual(len(results["skipped"]), 2, "the repeated crop and unsplit page are skipped")
+		self.assertEqual(notices[0].category, "Public Notice")
 
-		crop_image = notices[1].notice_image
+		crop_image = notices[0].notice_image
 		self.assertTrue(crop_image.startswith("/private/files/"))
-		self.assertIsNone(notices[0].notice_image)
 		self.assertTrue(
 			frappe.db.exists("File", {"file_url": results["file_url"], "attached_to_name": self.job.name})
 		)
 		saved = json.loads((self.folder / "notice_results.json").read_text())
-		self.assertEqual(saved["summary"]["total_notices"], 3)
+		self.assertEqual(saved["summary"]["total_notices"], 2)
 
 	def test_rerun_replaces_records(self):
 		self.build()
@@ -121,10 +120,10 @@ class TestEstateNotice(IntegrationTestCase):
 		notices = self.notices()
 
 		# Frappe may reuse the deleted names, so check the records are fresh rather than renamed.
-		self.assertEqual(len(notices), 3)
+		self.assertEqual(len(notices), 2)
 		self.assertEqual(
 			frappe.get_all("Estate Notice", filters={"job": self.job.name}, pluck="review_status"),
-			["Needs Review"] * 3,
+			["Needs Review"] * 2,
 		)
 		self.assertEqual(
 			frappe.db.count(

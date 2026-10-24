@@ -32,23 +32,23 @@ STRONG_PATTERNS = {
 		15,
 	),
 	"survey_number": (
-		r"\b(?:survey|sy\.?)\s*(?:no\.?|number)?\s*[:.\-]?\s*[\w\/\-]+",
+		r"\b(?:survey|sy\.?)\s*(?:(?:no\.?|number)\s*)?[:.\-]?\s*[A-Z0-9/-]*\d[A-Z0-9/-]*\b",
 		25,
 	),
 	"plot_number": (
-		r"\bplot\s*(?:no\.?|number)?\s*[:.\-]?\s*[\w\/\-]+",
+		r"\bplot\s*(?:(?:no\.?|number)\s*)?[:.\-]?\s*[A-Z0-9/-]*\d[A-Z0-9/-]*\b",
 		20,
 	),
 	"khata": (
-		r"\bkhata\s*(?:no\.?|number)?\s*[:.\-]?\s*[\w\/\-]+",
+		r"\bkhata\s*(?:(?:no\.?|number)\s*)?[:.\-]?\s*[A-Z0-9/-]*\d[A-Z0-9/-]*\b",
 		20,
 	),
 	"tp_number": (
-		r"\btp\s*(?:no\.?|number)?\s*[:.\-]?\s*[\w\/\-]+",
+		r"\btp\s*(?:(?:no\.?|number)\s*)?[:.\-]?\s*[A-Z0-9/-]*\d[A-Z0-9/-]*\b",
 		20,
 	),
 	"cts_number": (
-		r"\bcts\s*(?:no\.?|number)?\s*[:.\-]?\s*[\w\/\-]+",
+		r"\bcts\s*(?:(?:no\.?|number)\s*)?[:.\-]?\s*[A-Z0-9/-]*\d[A-Z0-9/-]*\b",
 		20,
 	),
 	"title_deed": (
