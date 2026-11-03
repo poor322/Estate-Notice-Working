@@ -21,7 +21,17 @@ parser = argparse.ArgumentParser(description="Automatic Gujarati and English Pub
 
 parser.add_argument("--pdf", required=True, help="Full path of the newspaper PDF")
 
+parser.add_argument(
+    "--pages",
+    help="Comma-separated page numbers to scan, e.g. 12 or 7,12,14"
+)
+
 args = parser.parse_args()
+
+SELECTED_PAGES = (
+    {int(p.strip()) for p in args.pages.split(",") if p.strip()}
+    if args.pages else set()
+)
 
 PDF = Path(args.pdf).expanduser().resolve()
 
@@ -155,7 +165,10 @@ print("OCR languages:", OCR_LANG)
 matching_pages = []
 
 for page_index in range(len(doc)):
-	page_number = page_index + 1
+    page_number = page_index + 1
+
+    if SELECTED_PAGES and page_number not in SELECTED_PAGES:
+        continue
 	page = doc[page_index]
 
 	pix = page.get_pixmap(matrix=pymupdf.Matrix(SCAN_SCALE, SCAN_SCALE), alpha=False)
